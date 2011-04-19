@@ -32,6 +32,9 @@ static void printTypeName(Conscell *cell)
 	case DEFUN:
 		fprintf(stderr, "DEFUN\n");
 		break;
+	case SETQ:
+		fprintf(stderr, "SETQ\n");
+		break;
 	case STRING:
 		fprintf(stderr, "STRING : %s\n", cell->string);
 		break;
@@ -82,6 +85,22 @@ static void VirtualMachineCode_dump(VirtualMachineCode *code)
 	case OPJL:
 		fprintf(stderr, "OPJL  : ");
 		break;
+	case OPJG:
+		fprintf(stderr, "OPJG  : ");
+		break;
+	case OPSTORE:
+		fprintf(stderr, "OPSTORE : ");
+		fprintf(stderr, "name = %s ", code->name);
+		break;
+	case OPLOAD:
+		fprintf(stderr, "OPLOAD : ");
+		break;
+	case OPPOP:
+		fprintf(stderr, "OPPOP : ");
+		break;
+	case OPCALL:
+		fprintf(stderr, "OPCALL : ");
+		break;
 	case OPRET:
 		fprintf(stderr, "OPRET : ");
 		break;
@@ -92,12 +111,11 @@ static void VirtualMachineCode_dump(VirtualMachineCode *code)
 }
 
 static int stack_count = 0;
-static int jump_flag = 0;
-static int *jump_true = 0;
-static int *jump_false = 0;
 VirtualMachineCode *new_VirtualMachineCode(Conscell *c, int base_count)
 {
 	VirtualMachineCode *ret = (VirtualMachineCode *)malloc(sizeof(VirtualMachineCode));
+	ret->name = NULL;
+	ret->args = NULL;
 	ret->dump = VirtualMachineCode_dump;
 	if (c == NULL) {
 		ret->op = OPRET;
@@ -110,7 +128,6 @@ VirtualMachineCode *new_VirtualMachineCode(Conscell *c, int base_count)
 		ret->op = OPADD;
 		ret->dst = stack_count;
 		ret->src = stack_count + base_count;
-		//ret->src = stack_count + base_count + 1;
 		break;
 	case SUB:
 		ret->op = OPSUB;
@@ -128,24 +145,78 @@ VirtualMachineCode *new_VirtualMachineCode(Conscell *c, int base_count)
 		ret->src = stack_count + base_count;
 		break;
 	case NUM:
-		//OPMOV
 		ret->op = OPMOV;
 		ret->dst = stack_count + base_count;
-		ret->src = c->num;//unused parameter
+		ret->src = c->num;
 		stack_count++;
 		break;
 	case IF:
 		ret->op = OPCMP;
-		ret->dst = 0;
-		ret->src = 0;
+		ret->dst = stack_count;
+		ret->src = stack_count + base_count;
 		break;
 	case LESS:
 		ret->op = OPJL;
 		ret->dst = stack_count;
-		ret->src = stack_count + base_count + 1;
-		//ret->dst = *jump_true;
-		//ret->src = *jump_false;
-		jump_flag = 1;
+		ret->src = stack_count + base_count;
+		break;
+	case GRATER:
+		ret->op = OPJG;
+		ret->dst = stack_count;
+		ret->src = stack_count + base_count;
+		break;
+	case DEFUN:
+		if (c->cdr->cdr->car != NULL) {
+			Conscell *args_cell = c->cdr->cdr->car;
+			Conscell *tmp = args_cell;
+			int i = 1;
+			while (tmp->cdr != NULL) {
+				tmp = tmp->cdr;
+				i++;
+			}
+			char **args = (char **)gmalloc(sizeof(char *) * i);
+			const char *arg_name = args_cell->string;
+			args[0] = (char *)gmalloc(strlen(arg_name) + 1);
+			strncpy(args[0], arg_name, strlen(arg_name) + 1);
+			i = 1;
+			while (args_cell->cdr != NULL) {
+				args_cell = args_cell->cdr;
+				arg_name = args_cell->string;
+				args[i] = (char *)gmalloc(strlen(arg_name) + 1);
+				strncpy(args[i], arg_name, strlen(arg_name) + 1);
+				i++;
+			}
+			ret->args = args;
+		}
+		//through
+	case SETQ:
+		ret->op = OPSTORE;
+		ret->dst = stack_count;
+		ret->src = stack_count + base_count;
+		Conscell *variable_cell = c->cdr;
+		char *variable_name = variable_cell->string;
+		size_t variable_name_length = strlen(variable_name) + 1;
+		ret->name = (char *)gmalloc(variable_name_length);
+		strncpy((char *)ret->name, variable_name, variable_name_length);
+		break;
+	case STRING:
+		ret->op = OPLOAD;
+		ret->dst = stack_count;
+		ret->src = -1; //unused parameter
+		variable_name = c->string;
+		variable_name_length = strlen(variable_name) + 1;
+		ret->name = (char *)gmalloc(variable_name_length);
+		strncpy((char *)ret->name, variable_name, variable_name_length);
+		stack_count++;
+		break;
+	case FUNC:
+		ret->op = OPCALL;
+		ret->dst = stack_count;
+		ret->src = -1;
+		variable_name = c->string;
+		variable_name_length = strlen(variable_name) + 1;
+		ret->name = (char *)gmalloc(variable_name_length);
+		strncpy((char *)ret->name, variable_name, variable_name_length);
 		break;
 	default:
 		break;
@@ -155,6 +226,7 @@ VirtualMachineCode *new_VirtualMachineCode(Conscell *c, int base_count)
 
 static int vm_count = 0;
 static VirtualMachineCode *vmcodes[MAX_STACK_SIZE] = {NULL};
+static VirtualMachineCode *local_func_code = NULL;
 static int Compiler_opCompile(Conscell *path, int base_count, int isRecursive)
 {
 	int ret = 0;
@@ -167,7 +239,8 @@ static int Compiler_opCompile(Conscell *path, int base_count, int isRecursive)
 	int create_inst_num = (isRecursive) ? opcount : opcount - 1;
 	//fprintf(stderr, "opcount = [%d]\n", opcount);
 	int optype = path->type;
-	if (optype == ADD || optype == SUB || optype == MULTI || optype == DIV) {
+	if (optype == ADD || optype == SUB || optype == MULTI || optype == DIV ||
+		optype == IF || optype == LESS || optype == GRATER) {
 		int i, n = 0;
 		Conscell *tmp = path;
 		tmp = tmp->cdr;
@@ -198,6 +271,14 @@ static int Compiler_opCompile(Conscell *path, int base_count, int isRecursive)
 			}
 			tmp = tmp->cdr;
 		}
+	} else if (optype == SETQ || optype == DEFUN || optype == FUNC) {
+		VirtualMachineCode *code = new_VirtualMachineCode(path, 0);
+		code->dump(code);
+		vmcodes[vm_count] = code;
+		vm_count++;
+		if (optype == DEFUN) {
+			local_func_code = code;
+		}
 	} else {
 		while (path->cdr != NULL) {
 			path = path->cdr;
@@ -209,7 +290,6 @@ static int Compiler_opCompile(Conscell *path, int base_count, int isRecursive)
 
 static VirtualMachineCode **Compiler_compile(Conscell *path)
 {
-	//asm("int3");
 	fprintf(stderr, "---init---\n");
 	Conscell *tmp = NULL;
 	while (path->car != NULL && path->type != FUNC) {
@@ -222,6 +302,7 @@ static VirtualMachineCode **Compiler_compile(Conscell *path)
 		puts("=======================================");
 		tmp = path;
 		while (tmp->cdr != NULL) {
+			if (tmp->type == SETQ || tmp->type == DEFUN) tmp = tmp->cdr;//skip string cell
 			tmp = tmp->cdr;
 			if (tmp->type != LEFT_PARENTHESIS) {
 				printTypeName(tmp);
@@ -233,9 +314,6 @@ static VirtualMachineCode **Compiler_compile(Conscell *path)
 				Compiler_compile(tmp);//recursive call
 			}
 		}
-	}
-	if (jump_flag) {
-		//jump true
 	}
 	fprintf(stderr, "---end---\n");
 	return vmcodes;
@@ -273,11 +351,70 @@ static void dumpAllVirtualMachineCode(VirtualMachineCode **vmcode)
 	}
 }
 
+#define MAX_VIRTUAL_MEMORY_SIZE 32
+static GMap *virtual_memory[MAX_VIRTUAL_MEMORY_SIZE] = {NULL};
+static int virtual_memory_address = 0;
+GMap *new_GMap(const char *key, void *value)
+{
+	GMap *ret = (GMap *)gmalloc(sizeof(GMap));
+	ret->key = (const char *)gmalloc(strlen(key) + 1);
+	strncpy(ret->key, key, strlen(key) + 1);
+	ret->value = value;
+	fprintf(stderr, "key = [%s]\n", key);
+	fprintf(stderr, "value = [%d]\n", (int)value);
+	return ret;
+}
+static void store_to_virtual_memory(GMap *map)
+{
+	virtual_memory[virtual_memory_address] = map;
+	virtual_memory_address++;
+}
+
+static void *fetch_from_virtual_memory(const char *key)
+{
+	int i = 0;
+	for (i = 0; i < virtual_memory_address; i++) {
+		GMap *map = virtual_memory[i];
+		if (strlen(key) == strlen(map->key) &&
+			!strncmp(map->key, key, strlen(key))) {
+			return map->value;
+		}
+	}
+	return NULL;
+}
+
+static int search_func_args_from_vmcode(VirtualMachineCode *c, const char *key)
+{
+	int ret = 0;
+	int i = 0;
+	while (c->args[i] != NULL) {
+		const char *arg_name = c->args[i];
+		if (strlen(arg_name) == strlen(key) &&
+			!strncmp(arg_name, key, strlen(arg_name) + 1)) {
+			ret = 1;
+		}
+		i++;
+	}
+	return ret;
+}
+
+static VirtualMachineCode **gcopy(VirtualMachineCode **o)
+{
+	VirtualMachineCode **ret = (VirtualMachineCode **)gmalloc(sizeof(void *) * (vm_count));
+	int i = 0;
+	ret[0] = new_VirtualMachineCode(NULL, 0);//OPRET
+	for (i = 1; i < vm_count - 1; i++) {
+		ret[i] = (VirtualMachineCode *)gmalloc(sizeof(VirtualMachineCode));
+		memcpy(ret[i], o[i], sizeof(VirtualMachineCode));
+	}
+	return ret;
+}
+
 static void VirtualMachine_run(VirtualMachineCode **vmcode)
 {
 	//asm("int3");
 	//fixedVirtualMachineCode(vmcode);
-	dumpAllVirtualMachineCode(vmcode);
+	//dumpAllVirtualMachineCode(vmcode);
 	int stack[MAX_STACK_SIZE] = {0};
 	int vm_stack_top = vm_count;
 	//fprintf(stderr, "stack_top = [%d]\n", vm_stack_top);
@@ -309,15 +446,82 @@ L_HEAD:
 		stack[(*pc)->dst] /= stack[(*pc)->src];
 		pc--;
 		goto L_HEAD;
+	case OPCMP:
+		fprintf(stderr, "OPCMP\n");
+		stack[(*pc)->dst] = stack[(*pc)->src];
+		if ((*--pc)->op == OPCMP) {
+			pc--;
+		}
+		goto L_HEAD;
 	case OPJL:
 		fprintf(stderr, "OPJL\n");
 		if (stack[(*pc)->dst] < stack[(*pc)->src]) {
 			puts("true");
-			stack[0] = stack[(*pc)->dst + 2];
+			pc -= 2;
 		} else {
 			puts("false");
-			stack[0] = stack[(*pc)->src + 2];
+			pc--;
 		}
+		goto L_HEAD;
+	case OPJG:
+		fprintf(stderr, "OPJG\n");
+		if (stack[(*pc)->dst] > stack[(*pc)->src]) {
+			puts("true");
+			pc -= 2;
+		} else {
+			puts("false");
+			pc--;
+		}
+		goto L_HEAD;
+	case OPSTORE:
+		fprintf(stderr, "OPSTORE\n");
+		GMap *map = NULL;
+		if ((*pc)->args == NULL) {
+			//variable
+			map = new_GMap((*pc)->name, (void *)stack[(*pc)->src]);
+		} else {
+			//function
+			local_func_code = *pc;
+			int base_code_num = 1; //for excluding OPSTORE code
+			VirtualMachineCode **vmcodes = gcopy(vmcode + base_code_num);
+			vmcodes[0]->dump(vmcodes[0]);
+			map = new_GMap((*pc)->name, (void *)vmcodes);
+		}
+		store_to_virtual_memory(map);
+		pc--;
+		goto L_HEAD;
+	case OPLOAD:
+		fprintf(stderr, "OPLOAD\n");
+		//load map from virtual memory
+		if (local_func_code != NULL && search_func_args_from_vmcode(local_func_code, (*pc)->name)) {
+			fprintf(stderr, "This variable is function's argument!!\n");
+			fprintf(stderr, "convert virtual machine code from OPLOAD to OPPOP\n");
+			(*pc)->op = OPPOP;
+			pc--;
+			goto L_HEAD;
+		}
+		void *value = fetch_from_virtual_memory((*pc)->name);
+		if (value == NULL) {
+			fprintf(stderr, "[ERROR] : undefined variable\n");
+			break;
+		}
+		fprintf(stderr, "value = [%d]\n", (int)value);
+		stack[(*pc)->dst] = (int)value;
+		pc--;
+		goto L_HEAD;
+	case OPCALL:
+		fprintf(stderr, "OPCALL\n");
+		VirtualMachineCode **func_vmcode = (VirtualMachineCode **)fetch_from_virtual_memory((*pc)->name);
+		if (func_vmcode == NULL) {
+			fprintf(stderr, "[ERROR] : undefined function name %s\n", (*pc)->name);
+			break;
+		}
+		fprintf(stderr, "func_vmcode = [%d]\n", (int)func_vmcode);
+		VirtualMachine_run(func_vmcode);
+		pc--;
+		goto L_HEAD;
+	case OPPOP:
+		fprintf(stderr, "OPPOP\n");
 		pc--;
 		goto L_HEAD;
 	case OPRET:
@@ -327,6 +531,7 @@ L_HEAD:
 	default:
 		break;
 	}
+	dumpAllVirtualMachineCode(vmcode);
 	fprintf(stderr, "ans = [%d]\n", stack[0]);
 	stack_count = 0;
 	int i = 0;
@@ -335,6 +540,7 @@ L_HEAD:
 		vmcode[i] = NULL;
 		i++;
 	}
+	local_func_code = NULL;
 	vm_count = 0;
 }
 

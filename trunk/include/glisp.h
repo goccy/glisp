@@ -12,29 +12,35 @@
 #define MAX_BRANCH_SIZE 32
 
 typedef struct cons_t {
-  union {
-	struct cons_t *car;
-	char *string;
-	int num;
-  };
-  struct cons_t *cdr;
-  int type;
-  /*FOR cannot insert result number to car's ptr
-	because I puzzled when union's cell free.*/
-  int result;//deprecated
+	union {
+		struct cons_t *car;
+		char *string;
+		int num;
+	};
+	struct cons_t *cdr;
+	int type;
+	/*FOR cannot insert result number to car's ptr
+	  because I puzzled when union's cell free.*/
+	int result;//deprecated
 } Conscell;
 
 typedef struct hash_t {
-  char *key;
-  int value;
-  struct hash_t *next;
+	char *key;
+	int value;
+	struct hash_t *next;
 } HashTable;
 
+typedef struct map_t {
+	char *key;
+	void *value;
+	
+} GMap;
+
 typedef struct func_t {
-  char *func_name;
-  char **args;
-  Conscell *root;
-  struct func_t *next;
+	char *func_name;
+	char **args;
+	Conscell *root;
+	struct func_t *next;
 } FuncTable;
 
 typedef enum {
@@ -50,13 +56,18 @@ typedef enum {
 	OPPUSH,
 	OPRET,
 	OPJL,
+	OPJG,
+	OPSTORE,
+	OPLOAD,
 } OpCode;
 
 typedef struct _VirtualMachineCode {
-	OpCode op; /*operation code*/
-	//int 
-	int dst;   /*first arg*/
-	int src;   /*second arg*/
+	OpCode op; /* operation code */
+	int dst;   /* register number */
+	int src;   /* src value or register number */
+	const char *name; /* variable or function name */
+	const char **args; /* function's args name set */
+	//int hash_num;
 	void (*dump)(struct _VirtualMachineCode *vmcode);
 } VirtualMachineCode;
 
