@@ -1,2 +1,2 @@
-(defun f(n)(+ n 1))
-(f 1)
+(defun f(n)(+ n 2))
+(f 3)

@@ -78,7 +78,7 @@ typedef struct compiler_t {
 
 typedef struct vm_t {
 	
-	void (*run)(VirtualMachineCode **vmcode);
+	int (*run)(VirtualMachineCode **vmcode, int inst_num);
 } VirtualMachine;
 
 enum CELL_TYPE {

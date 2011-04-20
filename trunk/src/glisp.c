@@ -66,7 +66,12 @@ void startGlispShell(void)
 				Compiler *c = new_Compiler();
 				VirtualMachineCode **vmcode = c->compile(root->cdr);
 				VirtualMachine *vm = new_VirtualMachine();
-				vm->run(vmcode);
+				int inst_num = 0;
+				while (vmcode[inst_num] != NULL) {
+					inst_num++;
+				}
+				int ret = vm->run(vmcode, inst_num);
+				fprintf(stderr, "ans = [%d]\n", ret);
 				//Conscell *ret = eval(root->cdr);
 				//displayResult(ret);
 				deleteToken(token);
@@ -114,7 +119,12 @@ void startGlispForFile(char *file_name)
 				Compiler *c = new_Compiler();
 				VirtualMachineCode **vmcode = c->compile(root->cdr);
 				VirtualMachine *vm = new_VirtualMachine();
-				vm->run(vmcode);
+				int inst_num = 0;
+				while (vmcode[inst_num] != NULL) {
+					inst_num++;
+				}
+				int ret = vm->run(vmcode, inst_num);
+				fprintf(stderr, "ans = [%d]\n", ret);
 				//Conscell *ret = eval(root->cdr);
 				//displayResult(ret);
 				deleteToken(token);

@@ -15,6 +15,8 @@ Conscell* new_Conscell(void)
 Conscell* parse(char **token)
 {
 	int i = 0;
+	int isFunctionCall = 0;//call flag
+	int isFunctionDefinition = 0;//defun flag
 	Conscell *root = new_Conscell();
 	Conscell *path = root;
 	Conscell *branch[MAX_BRANCH_SIZE] = {NULL};
@@ -79,19 +81,28 @@ Conscell* parse(char **token)
 			path->car = new_Conscell();
 			path = path->car;
 			path->type = DEFUN;
+			isFunctionDefinition = 1;
 		} else if (token[i][0] == '-') {
 			//sub number
 			int num = atoi(token[i]);
 			path->cdr = new_Conscell();
 			path = path->cdr;
-			path->type = NUM;
+			if (isFunctionCall && !isFunctionDefinition) {
+				path->type = FUNC_ARGS;
+			} else {
+				path->type = NUM;
+			}
 			path->num = num;
 		} else if (isdigit(token[i][0])) {
 			//number
 			int num = atoi(token[i]);
 			path->cdr = new_Conscell();
 			path = path->cdr;
-			path->type = NUM;
+			if (isFunctionCall && !isFunctionDefinition) {
+				path->type = FUNC_ARGS;
+			} else {
+				path->type = NUM;
+			}
 			path->num = num;
 		} else if (isalpha(token[i][0])) {
 			//string
@@ -100,6 +111,7 @@ Conscell* parse(char **token)
 				path->car = new_Conscell();
 				path = path->car;
 				path->type = FUNC;
+				isFunctionCall = 1;
 			} else {
 				path->cdr = new_Conscell();
 				path = path->cdr;

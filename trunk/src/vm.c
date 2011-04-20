@@ -95,6 +95,9 @@ static void VirtualMachineCode_dump(VirtualMachineCode *code)
 	case OPLOAD:
 		fprintf(stderr, "OPLOAD : ");
 		break;
+	case OPPUSH:
+		fprintf(stderr, "OPPUSH : ");
+		break;
 	case OPPOP:
 		fprintf(stderr, "OPPOP : ");
 		break;
@@ -148,6 +151,12 @@ VirtualMachineCode *new_VirtualMachineCode(Conscell *c, int base_count)
 		ret->op = OPMOV;
 		ret->dst = stack_count + base_count;
 		ret->src = c->num;
+		stack_count++;
+		break;
+	case FUNC_ARGS:
+		ret->op = OPPUSH;
+		ret->dst = c->num;
+		ret->src = -1;
 		stack_count++;
 		break;
 	case IF:
@@ -410,13 +419,16 @@ static VirtualMachineCode **gcopy(VirtualMachineCode **o)
 	return ret;
 }
 
-static void VirtualMachine_run(VirtualMachineCode **vmcode)
+static int function_arg_stack[MAX_STACK_SIZE] = {0};
+static int arg_stack_count = 0;
+static int VirtualMachine_run(VirtualMachineCode **vmcode, int inst_num)
 {
 	//asm("int3");
 	//fixedVirtualMachineCode(vmcode);
 	//dumpAllVirtualMachineCode(vmcode);
 	int stack[MAX_STACK_SIZE] = {0};
-	int vm_stack_top = vm_count;
+	//int vm_stack_top = vm_count;
+	int vm_stack_top = inst_num;
 	//fprintf(stderr, "stack_top = [%d]\n", vm_stack_top);
 	VirtualMachineCode **pc = vmcode + vm_stack_top - 1;
 L_HEAD:
@@ -516,12 +528,29 @@ L_HEAD:
 			fprintf(stderr, "[ERROR] : undefined function name %s\n", (*pc)->name);
 			break;
 		}
+		int i = 0;
+		while (func_vmcode[i] != NULL) {
+			i++;
+		}
 		fprintf(stderr, "func_vmcode = [%d]\n", (int)func_vmcode);
-		VirtualMachine_run(func_vmcode);
+		int res = VirtualMachine_run(func_vmcode, i);
+		stack[(*pc)->dst] = res;
+		pc--;
+		goto L_HEAD;
+	case OPPUSH:
+		fprintf(stderr, "OPPUSH\n");
+		fprintf(stderr, "%d\n", (*pc)->dst);
+		function_arg_stack[arg_stack_count] = (*pc)->dst;
+		fprintf(stderr, "push value = [%d]\n", function_arg_stack[arg_stack_count]);
+		arg_stack_count++;
 		pc--;
 		goto L_HEAD;
 	case OPPOP:
 		fprintf(stderr, "OPPOP\n");
+		arg_stack_count--;
+		(*pc)->src = function_arg_stack[arg_stack_count];
+		stack[(*pc)->dst] = (*pc)->src;
+		fprintf(stderr, "pop value = [%d]\n", function_arg_stack[arg_stack_count]);
 		pc--;
 		goto L_HEAD;
 	case OPRET:
@@ -532,7 +561,6 @@ L_HEAD:
 		break;
 	}
 	dumpAllVirtualMachineCode(vmcode);
-	fprintf(stderr, "ans = [%d]\n", stack[0]);
 	stack_count = 0;
 	int i = 0;
 	while (i < vm_count) {
@@ -542,6 +570,7 @@ L_HEAD:
 	}
 	local_func_code = NULL;
 	vm_count = 0;
+	return stack[0];
 }
 
 VirtualMachine *new_VirtualMachine(void)
