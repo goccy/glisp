@@ -82,13 +82,9 @@ void glisp_start_shell(void)
 			if (token != NULL && token[0] != NULL && !strncmp(token[0], "(", sizeof("("))) {
 				Conscell *root = p->parse(token);
 				Compiler *c = new_Compiler();
-				VirtualMachineCode **vmcode = c->compile(c, root->cdr);
+				VirtualMachineCodeArray *vmcode = c->compile(c, root->cdr);
 				VirtualMachine *vm = new_VirtualMachine();
-				int inst_num = 0;
-				while (vmcode[inst_num] != NULL) {
-					inst_num++;
-				}
-				int ret = vm->run(vmcode, inst_num);
+				int ret = vm->run(vmcode);
 				fprintf(stderr, "ans = [%d]\n", ret);
 				//Conscell *ret = eval(root->cdr);
 				//displayResult(ret);
@@ -138,16 +134,13 @@ void glisp_start_script(char *file_name)
 			if (token != NULL && token[0] != NULL && !strncmp(token[0], "(", sizeof("("))) {
 				Conscell *root = p->parse(token);
 				Compiler *c = new_Compiler();
-				VirtualMachineCode **vmcode = c->compile(c, root->cdr);
+				//VirtualMachineCode **vmcode = c->compile(c, root->cdr);
+				VirtualMachineCodeArray *vmcode = c->compile(c, root->cdr);
 				//puts("======= dump vmarray ======");
 				//c->vmcodes->dump(c->vmcodes);
 				//puts("===========================");
 				VirtualMachine *vm = new_VirtualMachine();
-				int inst_num = 0;
-				while (vmcode[inst_num] != NULL) {
-					inst_num++;
-				}
-				int ret = vm->run(vmcode, inst_num);
+				int ret = vm->run(vmcode);
 				fprintf(stderr, "ans = [%d]\n", ret);
 				//Conscell *ret = eval(root->cdr);
 				//displayResult(ret);

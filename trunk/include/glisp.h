@@ -34,7 +34,7 @@ typedef struct _Conscell {
 } Conscell;
 
 typedef struct _GMap {
-	char *key;
+	const char *key;
 	void *value;
 } GMap;
 
@@ -93,17 +93,18 @@ typedef struct _VirtualMachineCodeArray {
 	VirtualMachineCode **a;
 	size_t size;
 	void (*add)(struct _VirtualMachineCodeArray *array, VirtualMachineCode *code);
+	struct _VirtualMachineCodeArray *(*copy)(struct _VirtualMachineCodeArray *, int base_offset);
 	void (*dump)(struct _VirtualMachineCodeArray *array);
 } VirtualMachineCodeArray;
 
 typedef struct _Compiler {
 	VirtualMachineCodeArray *vmcodes;
-	VirtualMachineCode **(*compile)(struct _Compiler *, Conscell *conscell);
+	VirtualMachineCodeArray *(*compile)(struct _Compiler *, Conscell *conscell);
 } Compiler;
 
 typedef struct _VirtualMachine {
 	
-	int (*run)(VirtualMachineCode **vmcode, int inst_num);
+	int (*run)(VirtualMachineCodeArray *vmcode);
 } VirtualMachine;
 
 typedef enum {

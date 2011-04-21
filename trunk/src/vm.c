@@ -115,7 +115,7 @@ static void VirtualMachineCode_dump(VirtualMachineCode *code)
 static int stack_count = 0;
 VirtualMachineCode *new_VirtualMachineCode(Conscell *c, int base_count)
 {
-	VirtualMachineCode *ret = (VirtualMachineCode *)malloc(sizeof(VirtualMachineCode));
+	VirtualMachineCode *ret = (VirtualMachineCode *)gmalloc(sizeof(VirtualMachineCode));
 	ret->name = NULL;
 	ret->args = NULL;
 	ret->dump = VirtualMachineCode_dump;
@@ -182,16 +182,16 @@ VirtualMachineCode *new_VirtualMachineCode(Conscell *c, int base_count)
 				tmp = tmp->cdr;
 				i++;
 			}
-			char **args = (char **)gmalloc(sizeof(char *) * i);
+			const char **args = (const char **)gmalloc(sizeof(char *) * i);
 			const char *arg_name = args_cell->string;
 			args[0] = (char *)gmalloc(strlen(arg_name) + 1);
-			strncpy(args[0], arg_name, strlen(arg_name) + 1);
+			strncpy((char *)args[0], arg_name, strlen(arg_name) + 1);
 			i = 1;
 			while (args_cell->cdr != NULL) {
 				args_cell = args_cell->cdr;
 				arg_name = args_cell->string;
 				args[i] = (char *)gmalloc(strlen(arg_name) + 1);
-				strncpy(args[i], arg_name, strlen(arg_name) + 1);
+				strncpy((char *)args[i], arg_name, strlen(arg_name) + 1);
 				i++;
 			}
 			ret->args = args;
@@ -232,10 +232,8 @@ VirtualMachineCode *new_VirtualMachineCode(Conscell *c, int base_count)
 	return ret;
 }
 
-static int vm_count = 0;
-static VirtualMachineCode *vmcodes[MAX_STACK_SIZE] = {NULL};
 static VirtualMachineCode *local_func_code = NULL;
-static int Compiler_opCompile(Compiler *c, Conscell *path, int base_count, int isRecursive)
+static int Compiler_opCompile(Compiler *c, Conscell *path, int isRecursive)
 {
 	int ret = 0;
 	Conscell *root = path;
@@ -255,7 +253,7 @@ static int Compiler_opCompile(Compiler *c, Conscell *path, int base_count, int i
 		for (i = 0; i < create_inst_num; i++) {
 			if (tmp->type == LEFT_PARENTHESIS) {
 				//fprintf(stderr, "Recursive Call\n");
-				n = Compiler_opCompile(c, tmp->car, i, 1);//recursive
+				n = Compiler_opCompile(c, tmp->car, 1);//recursive
 				ret += n;
 				//fprintf(stderr, "n = [%d], i = [%d] ret = [%d]\n", n, i, ret);
 				VirtualMachineCode *code = NULL;
@@ -263,8 +261,8 @@ static int Compiler_opCompile(Compiler *c, Conscell *path, int base_count, int i
 					code = new_VirtualMachineCode(path, ret);
 					code->dump(code);
 					c->vmcodes->add(c->vmcodes, code);
-					vmcodes[vm_count] = code;
-					vm_count++;
+					//vmcodes[vm_count] = code;
+					//vm_count++;
 				}
 			} else {
 				ret++;
@@ -275,8 +273,8 @@ static int Compiler_opCompile(Compiler *c, Conscell *path, int base_count, int i
 					code = new_VirtualMachineCode(path, ret);
 					code->dump(code);
 					c->vmcodes->add(c->vmcodes, code);
-					vmcodes[vm_count] = code;
-					vm_count++;
+					//vmcodes[vm_count] = code;
+					//vm_count++;
 				}
 			}
 			tmp = tmp->cdr;
@@ -285,8 +283,8 @@ static int Compiler_opCompile(Compiler *c, Conscell *path, int base_count, int i
 		VirtualMachineCode *code = new_VirtualMachineCode(path, 0);
 		code->dump(code);
 		c->vmcodes->add(c->vmcodes, code);
-		vmcodes[vm_count] = code;
-		vm_count++;
+		//vmcodes[vm_count] = code;
+		//vm_count++;
 		if (optype == DEFUN) {
 			local_func_code = code;
 		}
@@ -299,8 +297,9 @@ static int Compiler_opCompile(Compiler *c, Conscell *path, int base_count, int i
 	return ret;
 }
 
-static VirtualMachineCode **Compiler_compile(Compiler *compiler, Conscell *path)
+static VirtualMachineCodeArray *Compiler_compile(Compiler *compiler, Conscell *path)
 {
+	//asm("int3");
 	fprintf(stderr, "---init---\n");
 	Conscell *tmp = NULL;
 	while (path->car != NULL && path->type != FUNC) {
@@ -309,7 +308,7 @@ static VirtualMachineCode **Compiler_compile(Compiler *compiler, Conscell *path)
 		fprintf(stderr, "opcode = ");
 		printTypeName(path);
 		puts("=== create calculate operation code ===");
-		Compiler_opCompile(compiler, path, 0, 0);
+		Compiler_opCompile(compiler, path, 0);
 		puts("=======================================");
 		tmp = path;
 		while (tmp->cdr != NULL) {
@@ -320,21 +319,35 @@ static VirtualMachineCode **Compiler_compile(Compiler *compiler, Conscell *path)
 				VirtualMachineCode *c = new_VirtualMachineCode(tmp, 0);
 				c->dump(c);
 				compiler->vmcodes->add(compiler->vmcodes, c);
-				vmcodes[vm_count] = c;
-				vm_count++;
+				//vmcodes[vm_count] = c;
+				//vm_count++;
 			} else {
 				Compiler_compile(compiler, tmp);//recursive call
 			}
 		}
 	}
 	fprintf(stderr, "---end---\n");
-	return vmcodes;
+	return compiler->vmcodes;
 }
 
+static VirtualMachineCodeArray *new_VirtualMachineCodeArray(void);
 static void VirtualMachineCodeArray_add(VirtualMachineCodeArray *array, VirtualMachineCode *c)
 {
 	array->a[array->size] = c;
 	array->size++;
+}
+
+static VirtualMachineCodeArray *VirtualMachineCodeArray_copy(VirtualMachineCodeArray *from, int base_offset)
+{
+	VirtualMachineCodeArray *f = from;
+	f->a += base_offset;
+	VirtualMachineCodeArray *ret = new_VirtualMachineCodeArray();
+	size_t i = 0;
+	ret->add(ret, new_VirtualMachineCode(NULL, 0));//OPRET
+	for (i = 1; i < from->size - 1; i++) {
+		ret->add(ret, f->a[i]);
+	}
+	return ret;
 }
 
 static void VirtualMachineCodeArray_dump(VirtualMachineCodeArray *array)
@@ -353,6 +366,7 @@ static VirtualMachineCodeArray *new_VirtualMachineCodeArray(void)
 	vm_array->a = (VirtualMachineCode **)gmalloc(sizeof(VirtualMachineCode) * MAX_STACK_SIZE);
 	vm_array->size = 0;
 	vm_array->add = VirtualMachineCodeArray_add;
+	vm_array->copy = VirtualMachineCodeArray_copy;
 	vm_array->dump = VirtualMachineCodeArray_dump;
 	return vm_array;
 }
@@ -364,19 +378,9 @@ Compiler *new_Compiler(void)
 	ret->compile = Compiler_compile;
 	VirtualMachineCode *code = new_VirtualMachineCode(NULL, 0);//OPRET
 	ret->vmcodes->add(ret->vmcodes, code);
-	vmcodes[vm_count] = code;
-	vm_count++;
+	//vmcodes[vm_count] = code;
+	//vm_count++;
 	return ret;
-}
-
-static void dumpAllVirtualMachineCode(VirtualMachineCode **vmcode)
-{
-	int i = 0;
-	while (vmcode[i] != NULL) {
-		fprintf(stderr, "L%d : ", i);
-		vmcode[i]->dump(vmcode[i]);
-		i++;
-	}
 }
 
 #define MAX_VIRTUAL_MEMORY_SIZE 32
@@ -386,7 +390,7 @@ GMap *new_GMap(const char *key, void *value)
 {
 	GMap *ret = (GMap *)gmalloc(sizeof(GMap));
 	ret->key = (const char *)gmalloc(strlen(key) + 1);
-	strncpy(ret->key, key, strlen(key) + 1);
+	strncpy((char *)ret->key, key, strlen(key) + 1);
 	ret->value = value;
 	fprintf(stderr, "key = [%s]\n", key);
 	fprintf(stderr, "value = [%d]\n", (int)value);
@@ -426,29 +430,15 @@ static int search_func_args_from_vmcode(VirtualMachineCode *c, const char *key)
 	return ret;
 }
 
-static VirtualMachineCode **gcopy(VirtualMachineCode **o)
-{
-	VirtualMachineCode **ret = (VirtualMachineCode **)gmalloc(sizeof(void *) * (vm_count));
-	int i = 0;
-	ret[0] = new_VirtualMachineCode(NULL, 0);//OPRET
-	for (i = 1; i < vm_count - 1; i++) {
-		ret[i] = (VirtualMachineCode *)gmalloc(sizeof(VirtualMachineCode));
-		memcpy(ret[i], o[i], sizeof(VirtualMachineCode));
-	}
-	return ret;
-}
-
 static int function_arg_stack[MAX_STACK_SIZE] = {0};
 static int arg_stack_count = 0;
-static int VirtualMachine_run(VirtualMachineCode **vmcode, int inst_num)
+static int VirtualMachine_run(VirtualMachineCodeArray *vmcode)
 {
 	//asm("int3");
-	//dumpAllVirtualMachineCode(vmcode);
 	int stack[MAX_STACK_SIZE] = {0};
-	//int vm_stack_top = vm_count;
-	int vm_stack_top = inst_num;
+	int vm_stack_top = vmcode->size;
 	//fprintf(stderr, "stack_top = [%d]\n", vm_stack_top);
-	VirtualMachineCode **pc = vmcode + vm_stack_top - 1;
+	VirtualMachineCode **pc = vmcode->a + vm_stack_top - 1;
 L_HEAD:
 	switch ((*pc)->op) {
 	case OPMOV:
@@ -513,8 +503,7 @@ L_HEAD:
 			//function
 			local_func_code = *pc;
 			int base_code_num = 1; //for excluding OPSTORE code
-			VirtualMachineCode **vmcodes = gcopy(vmcode + base_code_num);
-			vmcodes[0]->dump(vmcodes[0]);
+			VirtualMachineCodeArray *vmcodes = vmcode->copy(vmcode, base_code_num);
 			map = new_GMap((*pc)->name, (void *)vmcodes);
 		}
 		store_to_virtual_memory(map);
@@ -541,17 +530,13 @@ L_HEAD:
 		goto L_HEAD;
 	case OPCALL:
 		fprintf(stderr, "OPCALL\n");
-		VirtualMachineCode **func_vmcode = (VirtualMachineCode **)fetch_from_virtual_memory((*pc)->name);
+		VirtualMachineCodeArray *func_vmcode = (VirtualMachineCodeArray *)fetch_from_virtual_memory((*pc)->name);
 		if (func_vmcode == NULL) {
 			fprintf(stderr, "[ERROR] : undefined function name %s\n", (*pc)->name);
 			break;
 		}
-		int i = 0;
-		while (func_vmcode[i] != NULL) {
-			i++;
-		}
 		fprintf(stderr, "func_vmcode = [%d]\n", (int)func_vmcode);
-		int res = VirtualMachine_run(func_vmcode, i);
+		int res = VirtualMachine_run(func_vmcode);
 		stack[(*pc)->dst] = res;
 		pc--;
 		goto L_HEAD;
@@ -578,22 +563,22 @@ L_HEAD:
 	default:
 		break;
 	}
-	dumpAllVirtualMachineCode(vmcode);
 	stack_count = 0;
+	/*
 	int i = 0;
 	while (i < vm_count) {
 		free(vmcode[i]);
 		vmcode[i] = NULL;
 		i++;
 	}
+	*/
 	local_func_code = NULL;
-	vm_count = 0;
 	return stack[0];
 }
 
 VirtualMachine *new_VirtualMachine(void)
 {
-	VirtualMachine *ret = (VirtualMachine *)malloc(sizeof(VirtualMachine));
+	VirtualMachine *ret = (VirtualMachine *)gmalloc(sizeof(VirtualMachine));
 	ret->run = VirtualMachine_run;
 	return ret;
 }
