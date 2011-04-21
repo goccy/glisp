@@ -177,7 +177,7 @@ static Conscell* Parser_parse(char **token)
 				path = path->cdr;
 				path->type = STRING;
 			}
-			path->string = (char *)malloc(strlen(token[i]) + 1);
+			path->string = (char *)gmalloc(strlen(token[i]) + 1);
 			sprintf(path->string, "%s", token[i]);
 		}
 		i++;

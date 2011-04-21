@@ -30,6 +30,13 @@ static void VirtualMachineCode_dump(VirtualMachineCode *code)
 	case OPSTORE:
 		fprintf(stderr, "OPSTORE : ");
 		fprintf(stderr, "name = %s ", code->name);
+		if (code->args != NULL) {
+			int i = 0;
+			while (code->args[i] != NULL) {
+				fprintf(stderr, "args[%d] = %s ", i, code->args[i]);
+				i++;
+			}
+		}
 		break;
 	case OPLOAD:
 		fprintf(stderr, "OPLOAD : ");
@@ -94,8 +101,10 @@ VirtualMachineCode *new_VirtualMachineCode(Conscell *c, int base_count)
 		break;
 	case FUNC_ARGS:
 		ret->op = OPPUSH;
-		ret->dst = c->num;
-		ret->src = -1;
+		ret->dst = stack_count + base_count;
+		ret->src = c->num;
+		//ret->dst = c->num;
+		//ret->src = -1;
 		stack_count++;
 		break;
 	case IF:
@@ -173,6 +182,7 @@ VirtualMachineCode *new_VirtualMachineCode(Conscell *c, int base_count)
 }
 
 static VirtualMachineCode *local_func_code = NULL;
+static int isExecFlag = 1;
 static int Compiler_opCompile(Compiler *c, Conscell *path, int isRecursive)
 {
 	int ret = 0;
@@ -216,11 +226,30 @@ static int Compiler_opCompile(Compiler *c, Conscell *path, int isRecursive)
 			tmp = tmp->cdr;
 		}
 	} else if (optype == SETQ || optype == DEFUN || optype == FUNC) {
-		VirtualMachineCode *code = new_VirtualMachineCode(path, 0);
-		code->dump(code);
-		c->vmcodes->add(c->vmcodes, code);
-		if (optype == DEFUN) {
-			local_func_code = code; //set: ====> local_func_code
+		if (!isRecursive) {
+			VirtualMachineCode *code = new_VirtualMachineCode(path, 0);
+			code->dump(code);
+			c->vmcodes->add(c->vmcodes, code);
+			if (optype == DEFUN) {
+				isExecFlag = 0;
+				local_func_code = code; //set: ====> local_func_code
+			} else if (optype == FUNC && !isExecFlag) {
+				fprintf(stderr, "defun\n");
+				//TODO :  must support some arguments
+				//========== create push code ===========//
+				code = new_VirtualMachineCode(path, 0);
+				code->op = OPPUSH;
+				code->dst = stack_count;
+				code->src = -1;
+				//=======================================//
+				code->dump(code);
+				c->vmcodes->add(c->vmcodes, code);
+			}
+		} else {
+			if (optype == FUNC) {
+				int n = Compiler_opCompile(c, path->cdr->car, 1);//recursive
+				ret += n;
+			}
 		}
 	} else {
 		while (path->cdr != NULL) {
@@ -327,6 +356,7 @@ static int VirtualMachine_run(VirtualMachineCodeArray *vmcode)
 	//asm("int3");
 	int stack[MAX_STACK_SIZE] = {0};
 	int vm_stack_top = vmcode->size;
+	int cur_arg = -1; //this value is flag that copys pop num to all function argument
 	//fprintf(stderr, "stack_top = [%d]\n", vm_stack_top);
 	VirtualMachineCode **pc = vmcode->a + vm_stack_top - 1;
 L_HEAD:
@@ -420,30 +450,45 @@ L_HEAD:
 		goto L_HEAD;
 	case OPCALL:
 		fprintf(stderr, "OPCALL\n");
-		VirtualMachineCodeArray *func_vmcode = (VirtualMachineCodeArray *)fetch_from_virtual_memory((*pc)->name);
-		if (func_vmcode == NULL) {
-			fprintf(stderr, "[ERROR] : undefined function name %s\n", (*pc)->name);
-			break;
+		if (isExecFlag) {
+			VirtualMachineCodeArray *func_vmcode = (VirtualMachineCodeArray *)fetch_from_virtual_memory((*pc)->name);
+			if (func_vmcode == NULL) {
+				fprintf(stderr, "[ERROR] : undefined function name [%s]\n", (*pc)->name);
+				break;
+			}
+			fprintf(stderr, "func_vmcode = [%d]\n", (int)func_vmcode);
+			int res = VirtualMachine_run(func_vmcode);
+			stack[(*pc)->dst] = res;
 		}
-		fprintf(stderr, "func_vmcode = [%d]\n", (int)func_vmcode);
-		int res = VirtualMachine_run(func_vmcode);
-		stack[(*pc)->dst] = res;
 		pc--;
 		goto L_HEAD;
 	case OPPUSH:
+		//asm("int3");
 		fprintf(stderr, "OPPUSH\n");
 		fprintf(stderr, "%d\n", (*pc)->dst);
-		function_arg_stack[arg_stack_count] = (*pc)->dst;
+		if ((*pc)->src != -1) {
+			function_arg_stack[arg_stack_count] = (*pc)->src;
+		} else {
+			function_arg_stack[arg_stack_count] = stack[(*pc)->dst];
+		}
 		fprintf(stderr, "push value = [%d]\n", function_arg_stack[arg_stack_count]);
 		arg_stack_count++;
+		cur_arg = -1;
 		pc--;
 		goto L_HEAD;
 	case OPPOP:
+		//asm("int3");
 		fprintf(stderr, "OPPOP\n");
-		arg_stack_count--;
-		(*pc)->src = function_arg_stack[arg_stack_count];
+		if (cur_arg == -1) {
+			arg_stack_count--;
+			cur_arg = function_arg_stack[arg_stack_count];
+			(*pc)->src = cur_arg;
+		} else {
+			(*pc)->src = cur_arg;
+		}
+		//(*pc)->src = function_arg_stack[arg_stack_count];
 		stack[(*pc)->dst] = (*pc)->src;
-		fprintf(stderr, "pop value = [%d]\n", function_arg_stack[arg_stack_count]);
+		fprintf(stderr, "pop value = [%d]\n", cur_arg);
 		pc--;
 		goto L_HEAD;
 	case OPRET:
@@ -455,14 +500,16 @@ L_HEAD:
 	}
 	stack_count = 0;
 	/*
-	int i = 0;
-	while (i < vm_count) {
-		free(vmcode[i]);
-		vmcode[i] = NULL;
-		i++;
-	}
+	  int i = 0;
+	  while (i < vm_count) {
+	  free(vmcode[i]);
+	  vmcode[i] = NULL;
+	  i++;
+	  }
 	*/
+	vmcode->dump(vmcode);
 	local_func_code = NULL;
+	isExecFlag = 1;
 	return stack[0];
 }
 

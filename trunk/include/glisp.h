@@ -87,6 +87,7 @@ typedef struct _VirtualMachineCode {
 	int src;   /* src value or register number */
 	const char *name; /* variable or function name */
 	const char **args; /* function's args name set */
+	//int isCallFlag; /* flag of OPCALL execution */
 	//int hash_num;
 	void (*dump)(struct _VirtualMachineCode *vmcode);
 } VirtualMachineCode;
