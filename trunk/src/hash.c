@@ -2,17 +2,17 @@
 
 HashTable* searchHashTable(char *key)
 {
-  HashTable *ret = search_htop;
-  while(ret->next != NULL) {
-	ret = ret->next;
-	if (ret->key != NULL) {
-	  if (!strncmp(ret->key, key, strlen(key) + 1)) {
-		return ret;
-	  }
+	HashTable *ret = search_htop;
+	while (ret->next != NULL) {
+		ret = ret->next;
+		if (ret->key != NULL) {
+			if (!strncmp(ret->key, key, strlen(key) + 1)) {
+				return ret;
+			}
+		}
 	}
-  }
-  ret = NULL;
-  return ret;
+	ret = NULL;
+	return ret;
 }
 
 int getValFromHashTable(char *key)

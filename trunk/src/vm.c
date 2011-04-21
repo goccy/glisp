@@ -1,64 +1,4 @@
 #include <glisp.h>
-#define MAX_STACK_SIZE 128
-
-static void printTypeName(Conscell *cell)
-{
-	switch (cell->type) {
-	case ADD:
-		fprintf(stderr, "ADD\n");
-		break;
-	case SUB:
-		fprintf(stderr, "SUB\n");
-		break;
-	case MULTI:
-		fprintf(stderr, "MULTI\n");
-		break;
-	case DIV:
-		fprintf(stderr, "DIV\n");
-		break;
-	case GRATER:
-		fprintf(stderr, "GRATER\n");
-		break;
-	case LESS:
-		fprintf(stderr, "LESS\n");
-		break;
-	case EQUAL:
-		fprintf(stderr, "EQUAL\n");
-		break;
-	case IF:
-		fprintf(stderr, "IF\n");
-		break;
-	case DEFUN:
-		fprintf(stderr, "DEFUN\n");
-		break;
-	case SETQ:
-		fprintf(stderr, "SETQ\n");
-		break;
-	case STRING:
-		fprintf(stderr, "STRING : %s\n", cell->string);
-		break;
-	case NUM:
-		fprintf(stderr, "NUM : %d\n", cell->num);
-		break;
-	case LEFT_PARENTHESIS:
-		fprintf(stderr, "LEFT_PARENTHESIS\n");
-		break;
-	case RIGHT_PARENTHESIS:
-		fprintf(stderr, "RIGHT_PARENTHESIS\n");
-		break;
-	case FUNC:
-		fprintf(stderr, "FUNC\n");
-		break;
-	case FUNC_NAME:
-		fprintf(stderr, "FUNC_NAME\n");
-		break;
-	case FUNC_ARGS:
-		fprintf(stderr, "FUNC_ARGS\n");
-		break;
-	default:
-		break;
-	}
-}
 
 static void VirtualMachineCode_dump(VirtualMachineCode *code)
 {
@@ -261,8 +201,6 @@ static int Compiler_opCompile(Compiler *c, Conscell *path, int isRecursive)
 					code = new_VirtualMachineCode(path, ret);
 					code->dump(code);
 					c->vmcodes->add(c->vmcodes, code);
-					//vmcodes[vm_count] = code;
-					//vm_count++;
 				}
 			} else {
 				ret++;
@@ -273,8 +211,6 @@ static int Compiler_opCompile(Compiler *c, Conscell *path, int isRecursive)
 					code = new_VirtualMachineCode(path, ret);
 					code->dump(code);
 					c->vmcodes->add(c->vmcodes, code);
-					//vmcodes[vm_count] = code;
-					//vm_count++;
 				}
 			}
 			tmp = tmp->cdr;
@@ -283,10 +219,8 @@ static int Compiler_opCompile(Compiler *c, Conscell *path, int isRecursive)
 		VirtualMachineCode *code = new_VirtualMachineCode(path, 0);
 		code->dump(code);
 		c->vmcodes->add(c->vmcodes, code);
-		//vmcodes[vm_count] = code;
-		//vm_count++;
 		if (optype == DEFUN) {
-			local_func_code = code;
+			local_func_code = code; //set: ====> local_func_code
 		}
 	} else {
 		while (path->cdr != NULL) {
@@ -306,7 +240,7 @@ static VirtualMachineCodeArray *Compiler_compile(Compiler *compiler, Conscell *p
 		path = path->car;
 		if (path->cdr == NULL) break;
 		fprintf(stderr, "opcode = ");
-		printTypeName(path);
+		path->printTypeName(path);
 		puts("=== create calculate operation code ===");
 		Compiler_opCompile(compiler, path, 0);
 		puts("=======================================");
@@ -315,12 +249,10 @@ static VirtualMachineCodeArray *Compiler_compile(Compiler *compiler, Conscell *p
 			if (tmp->type == SETQ || tmp->type == DEFUN) tmp = tmp->cdr;//skip string cell
 			tmp = tmp->cdr;
 			if (tmp->type != LEFT_PARENTHESIS) {
-				printTypeName(tmp);
+				tmp->printTypeName(tmp);
 				VirtualMachineCode *c = new_VirtualMachineCode(tmp, 0);
 				c->dump(c);
 				compiler->vmcodes->add(compiler->vmcodes, c);
-				//vmcodes[vm_count] = c;
-				//vm_count++;
 			} else {
 				Compiler_compile(compiler, tmp);//recursive call
 			}
@@ -330,47 +262,6 @@ static VirtualMachineCodeArray *Compiler_compile(Compiler *compiler, Conscell *p
 	return compiler->vmcodes;
 }
 
-static VirtualMachineCodeArray *new_VirtualMachineCodeArray(void);
-static void VirtualMachineCodeArray_add(VirtualMachineCodeArray *array, VirtualMachineCode *c)
-{
-	array->a[array->size] = c;
-	array->size++;
-}
-
-static VirtualMachineCodeArray *VirtualMachineCodeArray_copy(VirtualMachineCodeArray *from, int base_offset)
-{
-	VirtualMachineCodeArray *f = from;
-	f->a += base_offset;
-	VirtualMachineCodeArray *ret = new_VirtualMachineCodeArray();
-	size_t i = 0;
-	ret->add(ret, new_VirtualMachineCode(NULL, 0));//OPRET
-	for (i = 1; i < from->size - 1; i++) {
-		ret->add(ret, f->a[i]);
-	}
-	return ret;
-}
-
-static void VirtualMachineCodeArray_dump(VirtualMachineCodeArray *array)
-{
-	int i = 0;
-	while (array->a[i] != NULL) {
-		fprintf(stderr, "L%d : ", i);
-		array->a[i]->dump(array->a[i]);
-		i++;
-	}
-}
-
-static VirtualMachineCodeArray *new_VirtualMachineCodeArray(void)
-{
-	VirtualMachineCodeArray *vm_array = (VirtualMachineCodeArray *)gmalloc(sizeof(VirtualMachineCodeArray));
-	vm_array->a = (VirtualMachineCode **)gmalloc(sizeof(VirtualMachineCode) * MAX_STACK_SIZE);
-	vm_array->size = 0;
-	vm_array->add = VirtualMachineCodeArray_add;
-	vm_array->copy = VirtualMachineCodeArray_copy;
-	vm_array->dump = VirtualMachineCodeArray_dump;
-	return vm_array;
-}
-
 Compiler *new_Compiler(void)
 {
 	Compiler *ret = (Compiler *)malloc(sizeof(Compiler));
@@ -378,8 +269,6 @@ Compiler *new_Compiler(void)
 	ret->compile = Compiler_compile;
 	VirtualMachineCode *code = new_VirtualMachineCode(NULL, 0);//OPRET
 	ret->vmcodes->add(ret->vmcodes, code);
-	//vmcodes[vm_count] = code;
-	//vm_count++;
 	return ret;
 }
 
@@ -396,6 +285,7 @@ GMap *new_GMap(const char *key, void *value)
 	fprintf(stderr, "value = [%d]\n", (int)value);
 	return ret;
 }
+
 static void store_to_virtual_memory(GMap *map)
 {
 	virtual_memory[virtual_memory_address] = map;

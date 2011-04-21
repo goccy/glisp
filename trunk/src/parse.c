@@ -1,5 +1,64 @@
 #include <glisp.h>
 
+static void Conscell_printTypeName(Conscell *cell)
+{
+	switch (cell->type) {
+	case ADD:
+		fprintf(stderr, "ADD\n");
+		break;
+	case SUB:
+		fprintf(stderr, "SUB\n");
+		break;
+	case MULTI:
+		fprintf(stderr, "MULTI\n");
+		break;
+	case DIV:
+		fprintf(stderr, "DIV\n");
+		break;
+	case GRATER:
+		fprintf(stderr, "GRATER\n");
+		break;
+	case LESS:
+		fprintf(stderr, "LESS\n");
+		break;
+	case EQUAL:
+		fprintf(stderr, "EQUAL\n");
+		break;
+	case IF:
+		fprintf(stderr, "IF\n");
+		break;
+	case DEFUN:
+		fprintf(stderr, "DEFUN\n");
+		break;
+	case SETQ:
+		fprintf(stderr, "SETQ\n");
+		break;
+	case STRING:
+		fprintf(stderr, "STRING : %s\n", cell->string);
+		break;
+	case NUM:
+		fprintf(stderr, "NUM : %d\n", cell->num);
+		break;
+	case LEFT_PARENTHESIS:
+		fprintf(stderr, "LEFT_PARENTHESIS\n");
+		break;
+	case RIGHT_PARENTHESIS:
+		fprintf(stderr, "RIGHT_PARENTHESIS\n");
+		break;
+	case FUNC:
+		fprintf(stderr, "FUNC\n");
+		break;
+	case FUNC_NAME:
+		fprintf(stderr, "FUNC_NAME\n");
+		break;
+	case FUNC_ARGS:
+		fprintf(stderr, "FUNC_ARGS\n");
+		break;
+	default:
+		break;
+	}
+}
+
 static Conscell* new_Conscell(void)
 {
 	Conscell *ret = (Conscell *)gmalloc(sizeof(Conscell));
@@ -9,6 +68,7 @@ static Conscell* new_Conscell(void)
 	ret->cdr = NULL;
 	ret->type = 0;
 	ret->result = 0;//deprecated
+	ret->printTypeName = Conscell_printTypeName;
 	return ret;
 }
 

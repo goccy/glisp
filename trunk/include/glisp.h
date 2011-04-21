@@ -10,6 +10,7 @@
 #define MAX_ARGS 16
 #define MAX_LINE_SIZE 128
 #define MAX_BRANCH_SIZE 32
+#define MAX_STACK_SIZE 128
 
 typedef struct _GString {
 	char *str;
@@ -31,6 +32,7 @@ typedef struct _Conscell {
 	/*FOR cannot insert result number to car's ptr
 	  because I puzzled when union's cell free.*/
 	int result;//deprecated
+	void (*printTypeName)(struct _Conscell *c);
 } Conscell;
 
 typedef struct _GMap {
@@ -51,14 +53,14 @@ typedef struct _Parser {
 typedef struct _HashTable {
 	char *key;
 	int value;
-	struct hash_t *next;
+	struct _HashTable *next;
 } HashTable;
 
 typedef struct _FuncTable {
 	char *func_name;
 	char **args;
 	Conscell *root;
-	struct func_t *next;
+	struct _FuncTable *next;
 } FuncTable;
 
 typedef enum {
@@ -90,8 +92,8 @@ typedef struct _VirtualMachineCode {
 } VirtualMachineCode;
 
 typedef struct _VirtualMachineCodeArray {
-	VirtualMachineCode **a;
-	size_t size;
+	VirtualMachineCode **a; /* original array */
+	size_t size; /* current vmcode size */
 	void (*add)(struct _VirtualMachineCodeArray *array, VirtualMachineCode *code);
 	struct _VirtualMachineCodeArray *(*copy)(struct _VirtualMachineCodeArray *, int base_offset);
 	void (*dump)(struct _VirtualMachineCodeArray *array);
@@ -136,6 +138,11 @@ void glisp_start_shell(void);
 void glisp_start_script(char *file_name);
 Tokenizer *new_Tokenizer(void);
 Parser *new_Parser(void);
+Compiler *new_Compiler(void);
+VirtualMachineCode *new_VirtualMachineCode(Conscell *c, int base_count);
+VirtualMachineCodeArray *new_VirtualMachineCodeArray(void);
+VirtualMachine *new_VirtualMachine(void);
+
 
 Conscell* eval(Conscell *root);
 
@@ -154,9 +161,6 @@ void deleteFuncTable(Parser *p);
 void deleteKeyFromHashTable(char *key);
 
 void* gmalloc(size_t size);
-
-Compiler *new_Compiler(void);
-VirtualMachine *new_VirtualMachine(void);
 
 /*Global Variable*/
 HashTable *hash_table;

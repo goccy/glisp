@@ -78,7 +78,6 @@ void glisp_start_shell(void)
 			strcat(tmp, " ");
 			strcat(tmp, line);
 			char **token = t->split(tmp);
-			//char **token = tokenizer(tmp);
 			if (token != NULL && token[0] != NULL && !strncmp(token[0], "(", sizeof("("))) {
 				Conscell *root = p->parse(token);
 				Compiler *c = new_Compiler();
@@ -129,21 +128,15 @@ void glisp_start_script(char *file_name)
 		if (check == 0) {
 			strcat(tmp, line);
 			printf("src = %s\n", tmp);
-			//char **token = tokenizer(tmp);
 			char **token = t->split(tmp);
 			if (token != NULL && token[0] != NULL && !strncmp(token[0], "(", sizeof("("))) {
 				Conscell *root = p->parse(token);
 				Compiler *c = new_Compiler();
-				//VirtualMachineCode **vmcode = c->compile(c, root->cdr);
 				VirtualMachineCodeArray *vmcode = c->compile(c, root->cdr);
-				//puts("======= dump vmarray ======");
-				//c->vmcodes->dump(c->vmcodes);
-				//puts("===========================");
 				VirtualMachine *vm = new_VirtualMachine();
 				int ret = vm->run(vmcode);
 				fprintf(stderr, "ans = [%d]\n", ret);
 				//Conscell *ret = eval(root->cdr);
-				//displayResult(ret);
 				t->delete(token);
 				p->delete(root);
 			}
