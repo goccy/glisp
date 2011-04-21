@@ -4,13 +4,16 @@ LDLIBS = -L/opt/local/lib/ -lreadline
 
 target = glisp
 
-objs = build/glisp.o build/token.o build/parse.o build/eval.o build/hash.o build/func.o build/mem.o build/vm.o
+objs = build/main.o build/glisp.o build/token.o build/parse.o build/eval.o build/hash.o build/func.o build/mem.o build/vm.o
 
 .PHONY: all
 all: $(target)
 
 $(target): $(objs)
 	$(CC) -o $@ $^ $(LDLIBS)
+
+build/main.o : src/main.c
+	$(CC) $(CFLAGS) -o $@ -c $^
 
 build/glisp.o : src/glisp.c
 	$(CC) $(CFLAGS) -o $@ -c $^

@@ -60,27 +60,27 @@ FuncTable* getFuncTable(char *func_name)
   }
 }
 
-void deleteFuncTable(void)
+void deleteFuncTable(Parser *p)
 {
-  FuncTable *del = search_ftop;
-  while (del->next != NULL) {
-	FuncTable *tmp = del->next;
-	free(del);
-	del = tmp;
-	if (del->args != NULL) {
-	  int i = 0;
-	  while (del->args[i] != EOL) {
-		free(del->args[i]);
-		i++;
-	  }
-	  free(del->args);
+	FuncTable *del = search_ftop;
+	while (del->next != NULL) {
+		FuncTable *tmp = del->next;
+		free(del);
+		del = tmp;
+		if (del->args != NULL) {
+			int i = 0;
+			while (del->args[i] != EOL) {
+				free(del->args[i]);
+				i++;
+			}
+			free(del->args);
+		}
+		if (del->func_name != NULL) {
+			free(del->func_name);
+		}
+		if (del->root != NULL) {
+			p->delete(del->root);
+		}
 	}
-	if (del->func_name != NULL) {
-	  free(del->func_name);
-	}
-	if (del->root != NULL) {
-	  deleteTree(del->root);
-	}
-  }
-  free(func_table);
+	free(func_table);
 }

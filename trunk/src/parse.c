@@ -1,6 +1,6 @@
 #include <glisp.h>
 
-Conscell* new_Conscell(void)
+static Conscell* new_Conscell(void)
 {
 	Conscell *ret = (Conscell *)gmalloc(sizeof(Conscell));
 	ret->car = NULL;
@@ -12,7 +12,7 @@ Conscell* new_Conscell(void)
 	return ret;
 }
 
-Conscell* parse(char **token)
+static Conscell* Parser_parse(char **token)
 {
 	int i = 0;
 	int isFunctionCall = 0;//call flag
@@ -125,7 +125,7 @@ Conscell* parse(char **token)
 	return root;
 }
 
-void deleteTree(Conscell *path)
+static void Parser_delete(Conscell *path)
 {
 	Conscell *tmp = NULL;
 	if (path->type == STRING || path->type == FUNC) {
@@ -134,7 +134,7 @@ void deleteTree(Conscell *path)
 			tmp = path->cdr;
 			free(path);
 			path = tmp;
-			deleteTree(path);
+			Parser_delete(path);
 		} else {
 			free(path->car);
 			free(path);
@@ -144,7 +144,7 @@ void deleteTree(Conscell *path)
 			tmp = path->cdr;
 			free(path);
 			path = tmp;
-			deleteTree(path);
+			Parser_delete(path);
 		} else {
 			free(path);
 		}
@@ -154,26 +154,34 @@ void deleteTree(Conscell *path)
 			tmp = path->cdr;
 			free(path);
 			path = tmp;
-			deleteTree(path);
+			Parser_delete(path);
 		} else {
 			free(path);
 		}
 	} else if (path->car != NULL && path->cdr != NULL) {
 		tmp = path->car;
-		deleteTree(tmp);
+		Parser_delete(tmp);
 		tmp = path->cdr;
 		free(path);
 		path = tmp;
-		deleteTree(path);
+		Parser_delete(path);
 	} else if (path->car != NULL && path->cdr == NULL) {
 		tmp = path->car;
 		free(path);
 		path = tmp;
-		deleteTree(path);
+		Parser_delete(path);
 	} else if (path->car == NULL && path->cdr != NULL) {
 		tmp = path->cdr;
 		free(path);
 		path = tmp;
-		deleteTree(path);
+		Parser_delete(path);
 	} 
+}
+
+Parser *new_Parser(void)
+{
+	Parser *p = (Parser *)gmalloc(sizeof(Parser));
+	p->parse = Parser_parse;
+	p->delete = Parser_delete;
+	return p;
 }

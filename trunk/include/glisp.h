@@ -11,32 +11,50 @@
 #define MAX_LINE_SIZE 128
 #define MAX_BRANCH_SIZE 32
 
-typedef struct cons_t {
+typedef struct _GString {
+	char *str;
+	size_t len;
+} GString;
+
+typedef struct _GStringArray {
+	GString **a;
+} GStringArray;
+
+typedef struct _Conscell {
 	union {
-		struct cons_t *car;
+		struct _Conscell *car;
 		char *string;
 		int num;
 	};
-	struct cons_t *cdr;
+	struct _Conscell *cdr;
 	int type;
 	/*FOR cannot insert result number to car's ptr
 	  because I puzzled when union's cell free.*/
 	int result;//deprecated
 } Conscell;
 
-typedef struct hash_t {
+typedef struct _GMap {
+	char *key;
+	void *value;
+} GMap;
+
+typedef struct _Tokenizer {
+	char **(*split)(char *line);
+	void (*delete)(char **token);
+} Tokenizer;
+
+typedef struct _Parser {
+	Conscell *(*parse)(char **token);
+	void (*delete)(Conscell *root);
+} Parser;
+
+typedef struct _HashTable {
 	char *key;
 	int value;
 	struct hash_t *next;
 } HashTable;
 
-typedef struct map_t {
-	char *key;
-	void *value;
-	
-} GMap;
-
-typedef struct func_t {
+typedef struct _FuncTable {
 	char *func_name;
 	char **args;
 	Conscell *root;
@@ -71,17 +89,24 @@ typedef struct _VirtualMachineCode {
 	void (*dump)(struct _VirtualMachineCode *vmcode);
 } VirtualMachineCode;
 
-typedef struct compiler_t {
-	
-	VirtualMachineCode **(*compile)(Conscell *conscell);
+typedef struct _VirtualMachineCodeArray {
+	VirtualMachineCode **a;
+	size_t size;
+	void (*add)(struct _VirtualMachineCodeArray *array, VirtualMachineCode *code);
+	void (*dump)(struct _VirtualMachineCodeArray *array);
+} VirtualMachineCodeArray;
+
+typedef struct _Compiler {
+	VirtualMachineCodeArray *vmcodes;
+	VirtualMachineCode **(*compile)(struct _Compiler *, Conscell *conscell);
 } Compiler;
 
-typedef struct vm_t {
+typedef struct _VirtualMachine {
 	
 	int (*run)(VirtualMachineCode **vmcode, int inst_num);
 } VirtualMachine;
 
-enum CELL_TYPE {
+typedef enum {
 	ADD,
 	SUB,
 	MULTI,
@@ -104,19 +129,12 @@ enum CELL_TYPE {
 	FUNC,
 	FUNC_NAME,
 	FUNC_ARGS,
-};
+} CellType;
 
-void init(void);
-void initTable(void);
-void startGlispShell(void);
-void startGlispForFile(char *file_name);
-int checkBrace(char *line);
-void displayResult(Conscell *ans);
-
-char** tokenizer(char *line);
-
-Conscell* new_Conscell(void);
-Conscell* parse(char **token);
+void glisp_start_shell(void);
+void glisp_start_script(char *file_name);
+Tokenizer *new_Tokenizer(void);
+Parser *new_Parser(void);
 
 Conscell* eval(Conscell *root);
 
@@ -130,10 +148,8 @@ FuncTable* searchFuncTable(char* func_name);
 void setToFuncTable(char *func_name, char **args, Conscell *root);
 FuncTable* getFuncTable(char *func_name);
 
-void deleteToken(char **token);
-void deleteTree(Conscell *root);
 void deleteHashTable(void);
-void deleteFuncTable(void);
+void deleteFuncTable(Parser *p);
 void deleteKeyFromHashTable(char *key);
 
 void* gmalloc(size_t size);

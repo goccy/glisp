@@ -2,19 +2,7 @@
 
 static int brace_count;
 
-void init(void)
-{
-	using_history();
-	add_history("(defun fib(n) (if (< n 3) 1 (+ (fib(- n 2)) (fib(- n 1)))))");
-	//add_history("(defun tarai(x y z)(if (<= x y) y ( (tarai( (tarai((- x 1) y z)) (tarai((- y 1) z x)) (tarai((- z 1) x y)))))))");
-	add_history("(fib 36)");
-	add_history("(setq x 4)");
-	add_history("(defun func(n) (+ n 2))");
-	initTable();
-	brace_count = 0;
-}
-
-void initTable(void)
+static void glisp_init_table(void)
 {
 	hash_table = new_HashTable();
 	search_htop = hash_table;
@@ -23,7 +11,19 @@ void initTable(void)
 	func_ptr = NULL;
 }
 
-void displayResult(Conscell *ans)
+static void glisp_init(void)
+{
+	using_history();
+	add_history("(defun fib(n) (if (< n 3) 1 (+ (fib(- n 2)) (fib(- n 1)))))");
+	//add_history("(defun tarai(x y z)(if (<= x y) y ( (tarai( (tarai((- x 1) y z)) (tarai((- y 1) z x)) (tarai((- z 1) x y)))))))");
+	add_history("(fib 36)");
+	add_history("(setq x 4)");
+	add_history("(defun func(n) (+ n 2))");
+	glisp_init_table();
+	brace_count = 0;
+}
+/*
+static void glisp_display_result(Conscell *ans)
 {
 	if (ans != NULL) {
 		if (ans->type == BOOL || ans->type == STR_BOOL) {
@@ -38,12 +38,29 @@ void displayResult(Conscell *ans)
 		} 
 	}
 }
+*/
+static int glisp_check_brace(char *line)
+{
+	//brace_count is global variable
+	int i = 0;
+	while (line[i] != EOL) {
+		if (line[i] == '(') {
+			brace_count++;
+		} else if (line[i] == ')') {
+			brace_count--;
+		}
+		i++;
+	}
+	return brace_count;
+}
 
-void startGlispShell(void)
+void glisp_start_shell(void)
 {
 	char *line = NULL;
 	char tmp[128] = {0};
-	init();
+	glisp_init();
+	Tokenizer *t = new_Tokenizer();
+	Parser *p = new_Parser();
 	while (true) {
 		if (line == NULL) {
 			line = readline(">>>");
@@ -52,19 +69,20 @@ void startGlispShell(void)
 		if (!strncmp(line, "quit", sizeof("quit")) ||
 			!strncmp(line, "exit", sizeof("exit"))) {
 			deleteHashTable();
-			deleteFuncTable();
+			deleteFuncTable(p);
 			exit(0);
 		}
 		add_history(line);
-		int check = checkBrace(line);
+		int check = glisp_check_brace(line);
 		if (check == 0) {
 			strcat(tmp, " ");
 			strcat(tmp, line);
-			char **token = tokenizer(tmp);
+			char **token = t->split(tmp);
+			//char **token = tokenizer(tmp);
 			if (token != NULL && token[0] != NULL && !strncmp(token[0], "(", sizeof("("))) {
-				Conscell *root = parse(token);
+				Conscell *root = p->parse(token);
 				Compiler *c = new_Compiler();
-				VirtualMachineCode **vmcode = c->compile(root->cdr);
+				VirtualMachineCode **vmcode = c->compile(c, root->cdr);
 				VirtualMachine *vm = new_VirtualMachine();
 				int inst_num = 0;
 				while (vmcode[inst_num] != NULL) {
@@ -74,8 +92,8 @@ void startGlispShell(void)
 				fprintf(stderr, "ans = [%d]\n", ret);
 				//Conscell *ret = eval(root->cdr);
 				//displayResult(ret);
-				deleteToken(token);
-				deleteTree(root);
+				t->delete(token);
+				p->delete(root);
 			}
 			tmp[0] = EOL;
 			free(line);
@@ -95,7 +113,7 @@ void startGlispShell(void)
 	}
 }
 
-void startGlispForFile(char *file_name)
+void glisp_start_script(char *file_name)
 {
 	char line[128] = {0};
 	char tmp[128] = {0};
@@ -107,17 +125,23 @@ void startGlispForFile(char *file_name)
 		exit(EXIT_FAILURE);
 		return;
 	}
-	initTable();
+	glisp_init_table();
+	Tokenizer *t = new_Tokenizer();
+	Parser *p = new_Parser();
 	while (fgets(line, MAX_LINE_SIZE, fp) != NULL) {
-		int check = checkBrace(line);
+		int check = glisp_check_brace(line);
 		if (check == 0) {
 			strcat(tmp, line);
 			printf("src = %s\n", tmp);
-			char **token = tokenizer(tmp);
+			//char **token = tokenizer(tmp);
+			char **token = t->split(tmp);
 			if (token != NULL && token[0] != NULL && !strncmp(token[0], "(", sizeof("("))) {
-				Conscell *root = parse(token);
+				Conscell *root = p->parse(token);
 				Compiler *c = new_Compiler();
-				VirtualMachineCode **vmcode = c->compile(root->cdr);
+				VirtualMachineCode **vmcode = c->compile(c, root->cdr);
+				//puts("======= dump vmarray ======");
+				//c->vmcodes->dump(c->vmcodes);
+				//puts("===========================");
 				VirtualMachine *vm = new_VirtualMachine();
 				int inst_num = 0;
 				while (vmcode[inst_num] != NULL) {
@@ -127,8 +151,8 @@ void startGlispForFile(char *file_name)
 				fprintf(stderr, "ans = [%d]\n", ret);
 				//Conscell *ret = eval(root->cdr);
 				//displayResult(ret);
-				deleteToken(token);
-				deleteTree(root);
+				t->delete(token);
+				p->delete(root);
 			}
 			tmp[0] = EOL;
 		} else if (check > 0) {
@@ -140,31 +164,5 @@ void startGlispForFile(char *file_name)
 	}
 	fclose(fp);
 	deleteHashTable();
-	deleteFuncTable();
+	deleteFuncTable(p);
 }
-
-int checkBrace(char *line)
-{
-  //brace_count is global variable
-  int i = 0;
-  while (line[i] != EOL) {
-	if (line[i] == '(') {
-	  brace_count++;
-	} else if (line[i] == ')') {
-	  brace_count--;
-	}
-	i++;
-  }
-  return brace_count;
-}
-
-int main(int argc, char **argv)
-{
-  if (argc < 2) {
-	startGlispShell();
-  } else {
-	startGlispForFile(argv[1]);
-  }
-  return 0;
-}
-
