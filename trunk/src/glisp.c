@@ -1,7 +1,6 @@
 #include <glisp.h>
 
-static int brace_count;
-
+static int brace_count = 0;
 static void glisp_init_table(void)
 {
 	hash_table = new_HashTable();
@@ -22,6 +21,7 @@ static void glisp_init(void)
 	glisp_init_table();
 	brace_count = 0;
 }
+
 /*
 static void glisp_display_result(Conscell *ans)
 {
@@ -64,7 +64,6 @@ void glisp_start_shell(void)
 	while (true) {
 		if (line == NULL) {
 			line = readline(">>>");
-			//printf("src = %s\n", line);
 		}
 		if (!strncmp(line, "quit", sizeof("quit")) ||
 			!strncmp(line, "exit", sizeof("exit"))) {
