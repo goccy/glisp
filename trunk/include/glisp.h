@@ -17,9 +17,15 @@
 	fprintf(stderr, fmt, ## __VA_ARGS__);	\
 	fprintf(stderr, "\n");						\
 	}											
+#define DBG_PL(fmt, ...) {\
+	fprintf(stderr, fmt, ## __VA_ARGS__);		\
+	}
+
 #else
-#define DBG_P(fmt, ...) {\
-}
+#define DBG_P(fmt, ...) {						\
+	}
+#define DBG_PL(fmt, ...) {						\
+	}
 #endif
 
 typedef struct _GString {
@@ -96,6 +102,8 @@ typedef enum {
 	OPiJGC,
 	OPFASTCALL,
 	OPiPUSHC,
+	OPTHCODE,
+	OPNOP,
 } OpCode;
 
 struct VirtualMachineCodeAPI;
@@ -134,6 +142,7 @@ typedef struct _Compiler {
 typedef struct _VirtualMachine {
 	int (*run)(VirtualMachineCodeArray *vmcode);
 	void (*setVariable)(VirtualMachineCodeArray *vmcode, int var);
+	void (*setFunction)(VirtualMachineCodeArray *vmcode);
 	void (*clear)(void);
 } VirtualMachine;
 

@@ -52,69 +52,75 @@ static void VirtualMachineCode_dump(VirtualMachineCode *code)
 {
 	switch (code->op) {
 	case OPADD:
-		DBG_P("OPADD : ");
+		DBG_PL("OPADD : ");
 		break;
 	case OPSUB:
-		DBG_P("OPSUB : ");
+		DBG_PL("OPSUB : ");
 		break;
 	case OPMUL:
-		DBG_P("OPMUL : ");
+		DBG_PL("OPMUL : ");
 		break;
 	case OPDIV:
-		DBG_P("OPDIV : ");
+		DBG_PL("OPDIV : ");
 		break;
 	case OPMOV:
-		DBG_P("OPMOV : ");
+		DBG_PL("OPMOV : ");
 		break;
 	case OPCMP:
-		DBG_P("OPCMP : ");
+		DBG_PL("OPCMP : ");
 		break;
 	case OPJL:
-		DBG_P("OPJL  : ");
+		DBG_PL("OPJL  : ");
 		break;
 	case OPJG:
-		DBG_P("OPJG  : ");
+		DBG_PL("OPJG  : ");
 		break;
 	case OPSTORE:
-		DBG_P("OPSTORE : ");
-		DBG_P("name = %s ", code->name);
+		DBG_PL("OPSTORE : ");
+		DBG_PL("name = %s ", code->name);
 		if (code->args != NULL) {
 			int i = 0;
 			while (code->args[i] != NULL) {
-				DBG_P("args[%d] = %s ", i, code->args[i]);
+				DBG_PL("args[%d] = %s ", i, code->args[i]);
 				i++;
 			}
 		}
 		break;
 	case OPLOAD:
-		DBG_P("OPLOAD : ");
+		DBG_PL("OPLOAD : ");
 		break;
 	case OPPUSH:
-		DBG_P("OPPUSH : ");
+		DBG_PL("OPPUSH : ");
 		break;
 	case OPPOP:
-		DBG_P("OPPOP : ");
+		DBG_PL("OPPOP : ");
 		break;
 	case OPCALL:
-		DBG_P("OPCALL : ");
+		DBG_PL("OPCALL : ");
 		break;
 	case OPRET:
-		DBG_P("OPRET : ");
+		DBG_PL("OPRET : ");
 		break;
 	case OPFASTCALL:
-		DBG_P("OPFASTCALL : ");
+		DBG_PL("OPFASTCALL : ");
 		break;
 	case OPiJLC:
-		DBG_P("OPiJLC : ");
+		DBG_PL("OPiJLC : ");
 		break;
 	case OPiJGC:
-		DBG_P("OPiJGC : ");
+		DBG_PL("OPiJGC : ");
 		break;
 	case OPiSUBC:
-		DBG_P("OPiSUBC : ");
+		DBG_PL("OPiSUBC : ");
 		break;
 	case OPiPUSHC:
-		DBG_P("OPiPUSHC : ");
+		DBG_PL("OPiPUSHC : ");
+		break;
+	case OPTHCODE:
+		DBG_PL("OPTHCODE : ");
+		break;
+	case OPNOP:
+		DBG_PL("OPNOP : ");
 		break;
 	default:
 		break;
@@ -458,6 +464,7 @@ inline int gmatch(const char *i, const char *you)
 }
 
 static int isSETQ = 0;
+static int isDEFUN = 0;
 static void Compiler_compileToFastCode(VirtualMachineCodeArray *vmcode)
 {
 	stack_count = 0;
@@ -466,12 +473,11 @@ static void Compiler_compileToFastCode(VirtualMachineCodeArray *vmcode)
 	VirtualMachineCode **pc = vmcode->a;// + vm_stack_top - 1;
 	const char *set_name = NULL;
 	if (isSetFlag) {
-		set_name = vmcode->a[1]->name;//pc[0] ==> OPRET, pc[1] ==> OPSTORE
+		set_name = vmcode->a[2]->name;//pc[0] ==> OPRET, pc[1] ==> OPSTORE
 	}
 	int i = 0;
 	int jl_register = 0;
 	for (i = vm_stack_top - 1; i > 0; i--) {
-		//pc[i]->dump(pc[i]);
 		switch (vmcode->a[i]->op) {
 		case OPCALL:
 			if (set_name != NULL && gmatch(pc[i]->name, set_name)) {
@@ -545,11 +551,7 @@ static void Compiler_compileToFastCode(VirtualMachineCodeArray *vmcode)
 			DBG_P("OPSTORE");
 			if (pc[i]->args != NULL) {
 				//function
-				int base_code_num = 1; //for excluding OPSTORE code
-				VirtualMachineCodeArray *vmcodes = vmcode->copy(vmcode, base_code_num);
-				GMap *map = new_GMap(pc[i]->name, (void *)vmcodes);
-				store_to_virtual_memory(map);
-				vmcode->size--;
+				isDEFUN = 1;
 			} else {
 				//variable
 				isSETQ = 1;
@@ -578,10 +580,32 @@ Compiler *new_Compiler(void)
 	ret->isExecFlag = 1;
 	ret->compile = Compiler_compile;
 	ret->compileToFastCode = Compiler_compileToFastCode;
+	//========== create thcode ===========//
+	VirtualMachineCode *thcode = new_VirtualMachineCode(NULL, 0);
+	thcode->op = OPTHCODE;
+	thcode->api->dump(thcode);
+	ret->vmcodes->add(ret->vmcodes, thcode);
+	//=======================================//
 	VirtualMachineCode *code = new_VirtualMachineCode(NULL, 0);//OPRET
 	ret->vmcodes->add(ret->vmcodes, code);
 	return ret;
 }
+
+inline void VirtualMachine_createDirectThreadingCode(VirtualMachineCodeArray *vmcode, void **jmp_table)
+{
+	int vm_stack_top = vmcode->size;
+	VirtualMachineCode **pc = vmcode->a;
+	int i = 0;
+	for (i = vm_stack_top - 1; i > 0; i--) {
+		pc[i]->opnext = jmp_table[pc[i]->op];
+	}
+	(vmcode->a[0])->op = OPNOP;
+}
+
+#define L(op) L_##op
+#define CASE(op) L(op) :
+#define NEXTOP *((*pc)->opnext)
+//#define FINISH *(opcodes[OPFINISH])
 
 static int function_arg_stack[MAX_STACK_SIZE] = {0};
 static int arg_stack_count = 0;
@@ -595,93 +619,121 @@ static inline int VirtualMachine_run(VirtualMachineCodeArray *vmcode)
 	int stack[MAX_STACK_SIZE] = {0};
 	int vm_stack_top = vmcode->size;
 	DBG_P("vmcode_size = [%d]", vm_stack_top);
+	void *jmp_table[] = {
+		&&L(OPMOV), &&L(OPADD), &&L(OPSUB), &&L(OPMUL), &&L(OPDIV),
+		&&L(OPCALL), &&L(OPJMP), &&L(OPCMP), &&L(OPPOP), &&L(OPPUSH),
+		&&L(OPRET), &&L(OPJL), &&L(OPJG), &&L(OPSTORE), &&L(OPLOAD),
+		&&L(OPiADDC), &&L(OPiSUBC), &&L(OPiJLC), &&L(OPiJGC), &&L(OPFASTCALL),
+		&&L(OPiPUSHC), &&L(OPTHCODE), &&L(OPNOP),
+	};
 	//fprintf(stderr, "false_jump_register = [%d]\n", false_jump_register);
 	VirtualMachineCode **pc = vmcode->a + vm_stack_top - 1;
-L_HEAD:
-	switch ((*pc)->op) {
-	case OPMOV:
+	goto *jmp_table[(vmcode->a[0])->op];
+	
+	CASE(OPMOV) {
 		DBG_P("OPMOV");
 		stack[(*pc)->dst] = (*pc)->src;
 		pc--;
-		goto L_HEAD;
-	case OPADD:
+		goto NEXTOP;
+	}
+	CASE(OPADD) {
 		DBG_P("OPADD");
 		stack[(*pc)->dst] += stack[(*pc)->src];
 		pc--;
-		goto L_HEAD;
-	case OPSUB:
+		goto NEXTOP;
+	}
+	CASE(OPiADDC) {
+		DBG_P("OPADD");
+		pc--;
+		goto NEXTOP;
+	}
+	CASE(OPSUB) {
 		DBG_P("OPSUB");
 		stack[(*pc)->dst] -= stack[(*pc)->src];
 		pc--;
-		goto L_HEAD;
-	case OPiSUBC:
+		goto NEXTOP;
+	}
+	CASE(OPiSUBC) {
 		DBG_P("OPiSUBC");
 		stack[(*pc)->dst] -= (*pc)->src;
 		pc--;
-		goto L_HEAD;
-	case OPMUL:
+		goto NEXTOP;
+	}
+	CASE(OPMUL) {
 		DBG_P("OPMUL");
 		stack[(*pc)->dst] *= stack[(*pc)->src];
 		pc--;
-		goto L_HEAD;
-	case OPDIV:
+		goto NEXTOP;
+	}
+	CASE(OPDIV) {
 		DBG_P("OPDIV");
 		stack[(*pc)->dst] /= stack[(*pc)->src];
 		pc--;
-		goto L_HEAD;
-	case OPCMP:
+		goto NEXTOP;
+	}
+	CASE(OPCMP) {
 		DBG_P("OPCMP");
 		pc -= (*pc)->dst;
-		goto L_HEAD;
-	case OPJL:
+		goto NEXTOP;
+	}
+	CASE(OPJL) {
 		DBG_P("OPJL");
 		if (stack[(*pc)->dst] < stack[(*pc)->src] && isExecFlag) {
 			pc -= 2;
 		} else {
 			pc -= 3;
 		}
-		goto L_HEAD;
-	case OPiJLC:
+		goto NEXTOP;
+	}
+	CASE(OPiJLC) {
 		DBG_P("OPiJLC");
 		if (stack[(*pc)->dst] < (*pc)->src) {
 			pc -= (*pc)->jmp;
 		} else {
 			pc--;
 		}
-		goto L_HEAD;
-	case OPJG:
+		goto NEXTOP;
+	}
+	CASE(OPJG) {
 		DBG_P("OPJG");
 		if (stack[(*pc)->dst] > stack[(*pc)->src]) {
 			pc -= 2;
 		} else {
 			pc -= 3;
 		}
-		goto L_HEAD;
-	case OPiJGC:
+		goto NEXTOP;
+	}
+	CASE(OPiJGC) {
 		DBG_P("OPiJGC");
 		if (stack[(*pc)->dst] > (*pc)->src) {
 			pc -= (*pc)->jmp;
 		} else {
 			pc--;
 		}
-		goto L_HEAD;
-	case OPLOAD:
+		goto NEXTOP;
+	}
+	CASE(OPLOAD) {
 		DBG_P("OPLOAD");
 		//load map from virtual memory
 		void *value = fetch_from_virtual_memory((*pc)->name);
 		if (value == NULL) {
-			fprintf(stderr, "[ERROR] : undefined variable\n");
-			break;
+			fprintf(stderr, "[ERROR] ) undefined variable\n");
+			return 0;
 		}
 		stack[(*pc)->dst] = (int)value;
 		pc--;
-		goto L_HEAD;
-	case OPCALL:
+		goto NEXTOP;
+	}
+	CASE(OPSTORE) {
+		pc--;
+		goto NEXTOP;
+	}
+	CASE(OPCALL) {
 		DBG_P("OPCALL");
 		VirtualMachineCodeArray *func_vmcode = (VirtualMachineCodeArray *)fetch_from_virtual_memory((*pc)->name);
 		if (func_vmcode == NULL) {
-			fprintf(stderr, "[ERROR] : undefined function name [%s]\n", (*pc)->name);
-			break;
+			fprintf(stderr, "[ERROR] ) undefined function name [%s]\n", (*pc)->name);
+			return 0;
 		}
 		local_cache_func_vmcode = func_vmcode;
 		DBG_P("arg_stack_count = [%d]", arg_stack_count);
@@ -691,32 +743,40 @@ L_HEAD:
 		cur_arg = -1;
 		stack[(*pc)->dst] = res;
 		pc--;
-		goto L_HEAD;
-	case OPFASTCALL:
+		goto NEXTOP;
+	}
+	CASE(OPJMP) {
+		pc--;
+		goto NEXTOP;
+	}
+	CASE(OPFASTCALL) {
 		DBG_P("OPFASTCALL");
-		res = VirtualMachine_run(local_cache_func_vmcode);
+		int res = VirtualMachine_run(local_cache_func_vmcode);
 		DBG_P("res = [%d]", res);
 		arg_stack_count--;
 		cur_arg = -1;
 		stack[(*pc)->dst] = res;
 		pc--;
-		goto L_HEAD;
-	case OPPUSH:
+		goto NEXTOP;
+	}
+	CASE(OPPUSH) {
 		DBG_P("OPPUSH");
 		arg_stack_count++;
 		function_arg_stack[arg_stack_count] = stack[(*pc)->dst];
 		DBG_P("function_arg_stack[arg_stack_count] = [%d]", function_arg_stack[arg_stack_count]);
 		cur_arg = -1;
 		pc--;
-		goto L_HEAD;
-	case OPiPUSHC:
+		goto NEXTOP;
+	}
+	CASE(OPiPUSHC) {
 		DBG_P("OPiPUSH");
 		arg_stack_count++;
 		function_arg_stack[arg_stack_count] = (*pc)->src;
 		cur_arg = -1;
 		pc--;
-		goto L_HEAD;
-	case OPPOP:
+		goto NEXTOP;
+	}
+	CASE(OPPOP) {
 		DBG_P("OPPOP");
 		if (cur_arg == -1) {
 			DBG_P("function_arg_stack[arg_stack_count] = [%d]", function_arg_stack[arg_stack_count]);
@@ -725,18 +785,25 @@ L_HEAD:
 		stack[(*pc)->dst] = cur_arg;
 		DBG_P("stack[%d] = [%d]", (*pc)->dst, (*pc)->src);
 		pc--;
-		goto L_HEAD;
-	case OPRET:
+		goto NEXTOP;
+	}
+	CASE(OPTHCODE) {
+		DBG_P("OPTHCODE");
+		VirtualMachine_createDirectThreadingCode(vmcode, jmp_table);
+		return 0;
+	}
+	CASE(OPNOP) {
+		DBG_P("OPNOP");
+		goto NEXTOP;
+	}
+	CASE(OPRET) {
 		DBG_P("OPRET");
 		stack[0] = stack[(*pc)->src];
 		pc--;
-		break;
-	default:
-		break;
+		DBG_P("stack[0] = [%d]", stack[0]);
+		DBG_P("arg_stack_count = [%d]", arg_stack_count);
+		return stack[0];
 	}
-	DBG_P("stack[0] = [%d]", stack[0]);
-	DBG_P("arg_stack_count = [%d]", arg_stack_count);
-	return stack[0];
 }
 
 static void VirtualMachine_setVariable(VirtualMachineCodeArray *vmcode, int var)
@@ -759,6 +826,28 @@ static void VirtualMachine_setVariable(VirtualMachineCodeArray *vmcode, int var)
 	}
 }
 
+static void VirtualMachine_setFunction(VirtualMachineCodeArray *vmcode)
+{
+	if (isSetFlag && isDEFUN) {
+		DBG_P("store vmcode to virtual memory");
+		VirtualMachineCode *store = NULL;
+		if (vmcode->a[1]->op == OPSTORE) {
+			store = vmcode->a[1];
+		} else if (vmcode->a[2]->op == OPSTORE) {
+			store = vmcode->a[2];
+		} else {
+			DBG_P("OPSTORE is cannnot find because isDEFUN flag is true");
+		}
+		int base_code_num = 2; //for excluding OPSTORE code
+		VirtualMachineCodeArray *vmcodes = vmcode->copy(vmcode, base_code_num);
+		//vmcodes->size--;
+		GMap *map = new_GMap(store->name, (void *)vmcodes);
+		store_to_virtual_memory(map);
+		vmcodes->dump(vmcode);
+		DBG_P("vmcode->size = [%ld]", vmcodes->size)
+	}
+}
+
 static void VirtualMachine_clear(void)
 {
 	stack_count = 0;
@@ -767,6 +856,7 @@ static void VirtualMachine_clear(void)
 	isConditionFlag = 0;
 	isSetFlag = 0;
 	isSETQ = 0;
+	isDEFUN = 0;
 	ret_call_count = 0;
 	false_jump_register = 0;
 }
@@ -776,6 +866,7 @@ VirtualMachine *new_VirtualMachine(void)
 	VirtualMachine *ret = (VirtualMachine *)gmalloc(sizeof(VirtualMachine));
 	ret->run = VirtualMachine_run;
 	ret->setVariable = VirtualMachine_setVariable;
+	ret->setFunction = VirtualMachine_setFunction;
 	ret->clear = VirtualMachine_clear;
 	return ret;
 }

@@ -11,11 +11,18 @@ static VirtualMachineCodeArray *VirtualMachineCodeArray_copy(VirtualMachineCodeA
 	VirtualMachineCodeArray *f = from;
 	f->a += base_offset;
 	VirtualMachineCodeArray *ret = new_VirtualMachineCodeArray();
+	VirtualMachineCode *nop = new_VirtualMachineCode(NULL, 0);
+	nop->op = OPNOP;
+	nop->opnext = from->a[-2]->opnext;
+	ret->add(ret, nop);
 	size_t i = 0;
-	ret->add(ret, new_VirtualMachineCode(NULL, 0));//OPRET
+	VirtualMachineCode *r = new_VirtualMachineCode(NULL, 0);//OPRET
+	r->opnext = from->a[-1]->opnext;
+	ret->add(ret, r);
 	for (i = 1; i < from->size - 1; i++) {
 		ret->add(ret, f->a[i]);
 	}
+	ret->size--;
 	return ret;
 }
 
@@ -23,7 +30,7 @@ static void VirtualMachineCodeArray_dump(VirtualMachineCodeArray *array)
 {
 	int i = 0;
 	while (array->a[i] != NULL) {
-		DBG_P("L%d : ", i);
+		DBG_PL("L%d : ", i);
 		array->a[i]->api->dump(array->a[i]);
 		i++;
 	}

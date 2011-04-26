@@ -134,12 +134,15 @@ void glisp_start_script(char *file_name)
 				Compiler *c = new_Compiler();
 				VirtualMachineCodeArray *vmcode = c->compile(c, root->cdr);
 				//vmcode->dump(vmcode);
-				c->compileToFastCode(vmcode);
 				VirtualMachine *vm = new_VirtualMachine();
+				c->compileToFastCode(vmcode);
+				vm->run(vmcode);//direct threading compile time & not execute
 				if (c->isExecFlag) {
-					int ret = vm->run(vmcode);
+					int ret = vm->run(vmcode);//execute
 					vm->setVariable(vmcode, ret);
 					fprintf(stderr, "ans = [%d]\n", ret);
+				} else {
+					vm->setFunction(vmcode);
 				}
 				vm->clear();
 				DBG_P("===================");
