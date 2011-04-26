@@ -23,10 +23,21 @@ static void VirtualMachineCodeArray_dump(VirtualMachineCodeArray *array)
 {
 	int i = 0;
 	while (array->a[i] != NULL) {
-		fprintf(stderr, "L%d : ", i);
+		DBG_P("L%d : ", i);
 		array->a[i]->dump(array->a[i]);
 		i++;
 	}
+}
+
+static void VirtualMachineCodeArray_remove(VirtualMachineCodeArray *array, int num)
+{
+	(array->a[num])->delete(array->a[num]);
+	size_t i = 0;
+	for (i = num; i < array->size - 1; i++) {
+		array->a[i] = array->a[i + 1];
+	}
+	array->a[i] = NULL;
+	array->size--;
 }
 
 VirtualMachineCodeArray *new_VirtualMachineCodeArray(void)
@@ -37,5 +48,6 @@ VirtualMachineCodeArray *new_VirtualMachineCodeArray(void)
 	vm_array->add = VirtualMachineCodeArray_add;
 	vm_array->copy = VirtualMachineCodeArray_copy;
 	vm_array->dump = VirtualMachineCodeArray_dump;
+	vm_array->remove = VirtualMachineCodeArray_remove;
 	return vm_array;
 }

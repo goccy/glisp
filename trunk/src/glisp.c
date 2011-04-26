@@ -83,6 +83,7 @@ void glisp_start_shell(void)
 				VirtualMachineCodeArray *vmcode = c->compile(c, root->cdr);
 				VirtualMachine *vm = new_VirtualMachine();
 				int ret = vm->run(vmcode);
+				DBG_P("===================");
 				fprintf(stderr, "ans = [%d]\n", ret);
 				//Conscell *ret = eval(root->cdr);
 				//displayResult(ret);
@@ -132,9 +133,16 @@ void glisp_start_script(char *file_name)
 				Conscell *root = p->parse(token);
 				Compiler *c = new_Compiler();
 				VirtualMachineCodeArray *vmcode = c->compile(c, root->cdr);
+				//vmcode->dump(vmcode);
+				c->compileToFastCode(vmcode);
 				VirtualMachine *vm = new_VirtualMachine();
-				int ret = vm->run(vmcode);
-				fprintf(stderr, "ans = [%d]\n", ret);
+				if (c->isExecFlag) {
+					int ret = vm->run(vmcode);
+					vm->setVariable(vmcode, ret);
+					fprintf(stderr, "ans = [%d]\n", ret);
+				}
+				vm->clear();
+				DBG_P("===================");
 				//Conscell *ret = eval(root->cdr);
 				t->delete(token);
 				p->delete(root);

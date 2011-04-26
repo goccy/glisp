@@ -4,55 +4,55 @@ static void Conscell_printTypeName(Conscell *cell)
 {
 	switch (cell->type) {
 	case ADD:
-		fprintf(stderr, "ADD\n");
+		DBG_P("ADD");
 		break;
 	case SUB:
-		fprintf(stderr, "SUB\n");
+		DBG_P("SUB");
 		break;
 	case MULTI:
-		fprintf(stderr, "MULTI\n");
+		DBG_P("MULTI");
 		break;
 	case DIV:
-		fprintf(stderr, "DIV\n");
+		DBG_P("DIV");
 		break;
 	case GRATER:
-		fprintf(stderr, "GRATER\n");
+		DBG_P("GRATER");
 		break;
 	case LESS:
-		fprintf(stderr, "LESS\n");
+		DBG_P("LESS");
 		break;
 	case EQUAL:
-		fprintf(stderr, "EQUAL\n");
+		DBG_P("EQUAL");
 		break;
 	case IF:
-		fprintf(stderr, "IF\n");
+		DBG_P("IF");
 		break;
 	case DEFUN:
-		fprintf(stderr, "DEFUN\n");
+		DBG_P("DEFUN");
 		break;
 	case SETQ:
-		fprintf(stderr, "SETQ\n");
+		DBG_P("SETQ");
 		break;
 	case STRING:
-		fprintf(stderr, "STRING : %s\n", cell->string);
+		DBG_P("STRING : %s", cell->string);
 		break;
 	case NUM:
-		fprintf(stderr, "NUM : %d\n", cell->num);
+		DBG_P("NUM : %d", cell->num);
 		break;
 	case LEFT_PARENTHESIS:
-		fprintf(stderr, "LEFT_PARENTHESIS\n");
+		DBG_P("LEFT_PARENTHESIS");
 		break;
 	case RIGHT_PARENTHESIS:
-		fprintf(stderr, "RIGHT_PARENTHESIS\n");
+		DBG_P("RIGHT_PARENTHESIS");
 		break;
 	case FUNC:
-		fprintf(stderr, "FUNC\n");
+		DBG_P("FUNC");
 		break;
 	case FUNC_NAME:
-		fprintf(stderr, "FUNC_NAME\n");
+		DBG_P("FUNC_NAME");
 		break;
 	case FUNC_ARGS:
-		fprintf(stderr, "FUNC_ARGS\n");
+		DBG_P("FUNC_ARGS");
 		break;
 	default:
 		break;

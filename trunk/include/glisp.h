@@ -12,6 +12,16 @@
 #define MAX_BRANCH_SIZE 32
 #define MAX_STACK_SIZE 128
 
+#ifdef DEBUG_MODE
+#define DBG_P(fmt, ...) {\
+	fprintf(stderr, fmt, ## __VA_ARGS__);	\
+	fprintf(stderr, "\n");						\
+	}											
+#else
+#define DBG_P(fmt, ...) {\
+}
+#endif
+
 typedef struct _GString {
 	char *str;
 	size_t len;
@@ -79,17 +89,24 @@ typedef enum {
 	OPJG,
 	OPSTORE,
 	OPLOAD,
+	/* FAST CALL INST */
+	OPiADDC,
+	OPiSUBC,
+	OPiJLC,
+	OPiJGC,
+	OPFASTCALL,
 } OpCode;
 
 typedef struct _VirtualMachineCode {
 	OpCode op; /* operation code */
 	int dst;   /* register number */
 	int src;   /* src value or register number */
+	int jmp;   /* jmp register number */
 	const char *name; /* variable or function name */
 	const char **args; /* function's args name set */
 	//int isCallFlag; /* flag of OPCALL execution */
-	//int hash_num;
 	void (*dump)(struct _VirtualMachineCode *vmcode);
+	void (*delete)(struct _VirtualMachineCode *vmcode);
 } VirtualMachineCode;
 
 typedef struct _VirtualMachineCodeArray {
@@ -98,16 +115,20 @@ typedef struct _VirtualMachineCodeArray {
 	void (*add)(struct _VirtualMachineCodeArray *array, VirtualMachineCode *code);
 	struct _VirtualMachineCodeArray *(*copy)(struct _VirtualMachineCodeArray *, int base_offset);
 	void (*dump)(struct _VirtualMachineCodeArray *array);
+	void (*remove)(struct _VirtualMachineCodeArray *array, int num);
 } VirtualMachineCodeArray;
 
 typedef struct _Compiler {
 	VirtualMachineCodeArray *vmcodes;
+	int isExecFlag;
 	VirtualMachineCodeArray *(*compile)(struct _Compiler *, Conscell *conscell);
+	void (*compileToFastCode)(VirtualMachineCodeArray *vmcode);
 } Compiler;
 
 typedef struct _VirtualMachine {
-	
 	int (*run)(VirtualMachineCodeArray *vmcode);
+	void (*setVariable)(VirtualMachineCodeArray *vmcode, int var);
+	void (*clear)(void);
 } VirtualMachine;
 
 typedef enum {
@@ -162,7 +183,7 @@ void deleteFuncTable(Parser *p);
 void deleteKeyFromHashTable(char *key);
 
 void* gmalloc(size_t size);
-
+int gmatch(const char *i, const char *you);
 /*Global Variable*/
 HashTable *hash_table;
 HashTable *search_htop;
