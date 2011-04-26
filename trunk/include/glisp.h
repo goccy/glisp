@@ -95,6 +95,7 @@ typedef enum {
 	OPiJLC,
 	OPiJGC,
 	OPFASTCALL,
+	OPiPUSHC,
 } OpCode;
 
 typedef struct _VirtualMachineCode {
@@ -104,7 +105,6 @@ typedef struct _VirtualMachineCode {
 	int jmp;   /* jmp register number */
 	const char *name; /* variable or function name */
 	const char **args; /* function's args name set */
-	//int isCallFlag; /* flag of OPCALL execution */
 	void (*dump)(struct _VirtualMachineCode *vmcode);
 	void (*delete)(struct _VirtualMachineCode *vmcode);
 } VirtualMachineCode;

@@ -113,6 +113,9 @@ static void VirtualMachineCode_dump(VirtualMachineCode *code)
 	case OPiSUBC:
 		DBG_P("OPiSUBC : ");
 		break;
+	case OPiPUSHC:
+		DBG_P("OPiPUSHC : ");
+		break;
 	default:
 		break;
 	}
@@ -546,6 +549,12 @@ static void Compiler_compileToFastCode(VirtualMachineCodeArray *vmcode)
 			}
 			break;
 		}
+		case OPPUSH:
+			DBG_P("OPPUSH");
+			if (pc[i]->src != -1) {
+				pc[i]->op = OPiPUSHC;
+			}
+			break;
 		case OPRET:
 			jl_register = -1;
 			break;
@@ -688,12 +697,15 @@ L_HEAD:
 	case OPPUSH:
 		DBG_P("OPPUSH");
 		arg_stack_count++;
-		if ((*pc)->src != -1) {
-			function_arg_stack[arg_stack_count] = (*pc)->src;
-		} else {
-			function_arg_stack[arg_stack_count] = stack[(*pc)->dst];
-		}
+		function_arg_stack[arg_stack_count] = stack[(*pc)->dst];
 		DBG_P("function_arg_stack[arg_stack_count] = [%d]", function_arg_stack[arg_stack_count]);
+		cur_arg = -1;
+		pc--;
+		goto L_HEAD;
+	case OPiPUSHC:
+		DBG_P("OPiPUSH");
+		arg_stack_count++;
+		function_arg_stack[arg_stack_count] = (*pc)->src;
 		cur_arg = -1;
 		pc--;
 		goto L_HEAD;
