@@ -98,6 +98,7 @@ typedef enum {
 	OPiPUSHC,
 } OpCode;
 
+struct VirtualMachineCodeAPI;
 typedef struct _VirtualMachineCode {
 	OpCode op; /* operation code */
 	int dst;   /* register number */
@@ -105,9 +106,14 @@ typedef struct _VirtualMachineCode {
 	int jmp;   /* jmp register number */
 	const char *name; /* variable or function name */
 	const char **args; /* function's args name set */
+	void *opnext; /* for direct threading */
+	struct VirtualMachineCodeAPI *api; /* methods */
+} VirtualMachineCode;
+
+typedef struct VirtualMachineCodeAPI {
 	void (*dump)(struct _VirtualMachineCode *vmcode);
 	void (*delete)(struct _VirtualMachineCode *vmcode);
-} VirtualMachineCode;
+} VirtualMachineCodeAPI;
 
 typedef struct _VirtualMachineCodeArray {
 	VirtualMachineCode **a; /* original array */

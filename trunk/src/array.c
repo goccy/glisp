@@ -24,14 +24,14 @@ static void VirtualMachineCodeArray_dump(VirtualMachineCodeArray *array)
 	int i = 0;
 	while (array->a[i] != NULL) {
 		DBG_P("L%d : ", i);
-		array->a[i]->dump(array->a[i]);
+		array->a[i]->api->dump(array->a[i]);
 		i++;
 	}
 }
 
 static void VirtualMachineCodeArray_remove(VirtualMachineCodeArray *array, int num)
 {
-	(array->a[num])->delete(array->a[num]);
+	(array->a[num])->api->delete(array->a[num]);
 	size_t i = 0;
 	for (i = num; i < array->size - 1; i++) {
 		array->a[i] = array->a[i + 1];

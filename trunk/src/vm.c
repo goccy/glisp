@@ -137,6 +137,14 @@ static void VirtualMachineCode_delete(VirtualMachineCode *c)
 	c = NULL;
 }
 
+static VirtualMachineCodeAPI *new_VirtualMachineCodeAPI(void)
+{
+	VirtualMachineCodeAPI *ret = (VirtualMachineCodeAPI *)gmalloc(sizeof(VirtualMachineCodeAPI));
+	ret->dump = VirtualMachineCode_dump;
+	ret->delete = VirtualMachineCode_delete;
+	return ret;
+}
+
 //===========Bad Code===============//
 static int false_jump_register = 0;
 static int ret_call_count = 0;
@@ -149,8 +157,7 @@ VirtualMachineCode *new_VirtualMachineCode(Conscell *c, int base_count)
 	ret->jmp = 0;
 	ret->name = NULL;
 	ret->args = NULL;
-	ret->dump = VirtualMachineCode_dump;
-	ret->delete = VirtualMachineCode_delete;
+	ret->api = new_VirtualMachineCodeAPI();
 	if (c == NULL) {
 		ret->op = OPRET;
 		ret->dst = 0;
@@ -310,7 +317,7 @@ static int Compiler_opCompile(Compiler *c, Conscell *path, int isRecursive)
 				//fprintf(stderr, "n = [%d], i = [%d] ret = [%d]\n", n, i, ret);
 				if (!isRecursive) {
 					VirtualMachineCode *code = new_VirtualMachineCode(path, ret);
-					code->dump(code);
+					code->api->dump(code);
 					c->vmcodes->add(c->vmcodes, code);
 				}
 			} else {
@@ -319,7 +326,7 @@ static int Compiler_opCompile(Compiler *c, Conscell *path, int isRecursive)
 				//fprintf(stderr, "Value Cell\n");
 				if (!isRecursive) {
 					VirtualMachineCode *code = new_VirtualMachineCode(path, ret);
-					code->dump(code);
+					code->api->dump(code);
 					c->vmcodes->add(c->vmcodes, code);
 				}
 			}
@@ -328,7 +335,7 @@ static int Compiler_opCompile(Compiler *c, Conscell *path, int isRecursive)
 	} else if (optype == SETQ || optype == DEFUN || optype == FUNC) {
 		if (!isRecursive) {
 			VirtualMachineCode *code = new_VirtualMachineCode(path, 0);
-			code->dump(code);
+			code->api->dump(code);
 			c->vmcodes->add(c->vmcodes, code);
 			if (optype == SETQ ||optype == DEFUN) {
 				isSetFlag = 1;
@@ -346,7 +353,7 @@ static int Compiler_opCompile(Compiler *c, Conscell *path, int isRecursive)
 				code->dst = stack_count;
 				code->src = -1;
 				//=======================================//
-				code->dump(code);
+				code->api->dump(code);
 				c->vmcodes->add(c->vmcodes, code);
 			}
 		} else {
@@ -362,7 +369,7 @@ static int Compiler_opCompile(Compiler *c, Conscell *path, int isRecursive)
 			tmp = tmp->cdr;
 			if (tmp->type == NUM) {
 				VirtualMachineCode *code = new_VirtualMachineCode(tmp, ret);
-				code->dump(code);
+				code->api->dump(code);
 				c->vmcodes->add(c->vmcodes, code);
 			} else {
 				Compiler_opCompile(c, tmp, 0);
@@ -394,7 +401,7 @@ static VirtualMachineCodeArray *Compiler_compile(Compiler *compiler, Conscell *p
 				if (tmp->type == SETQ || tmp->type == DEFUN) tmp = tmp->cdr;//skip string cell
 				tmp = tmp->cdr;
 				VirtualMachineCode *code = new_VirtualMachineCode(NULL, 0);//OPRET
-				code->dump(code);
+				code->api->dump(code);
 				compiler->vmcodes->add(compiler->vmcodes, code);
 				//=====TODO : must fix this bad code becase cannot support if nested code.====
 				ret_call_count++;
@@ -405,7 +412,7 @@ static VirtualMachineCodeArray *Compiler_compile(Compiler *compiler, Conscell *p
 				if (tmp->type != LEFT_PARENTHESIS) {
 					tmp->printTypeName(tmp);
 					VirtualMachineCode *c = new_VirtualMachineCode(tmp, 0);
-					c->dump(c);
+					c->api->dump(c);
 					compiler->vmcodes->add(compiler->vmcodes, c);
 					compiler->vmcodes->dump(compiler->vmcodes);
 				} else {
@@ -427,7 +434,7 @@ static VirtualMachineCodeArray *Compiler_compile(Compiler *compiler, Conscell *p
 				if (tmp->type != LEFT_PARENTHESIS) {
 					tmp->printTypeName(tmp);
 					VirtualMachineCode *c = new_VirtualMachineCode(tmp, 0);
-					c->dump(c);
+					c->api->dump(c);
 					compiler->vmcodes->add(compiler->vmcodes, c);
 					//compiler->vmcodes->dump(compiler->vmcodes);
 				} else {
