@@ -130,6 +130,7 @@ typedef struct _VirtualMachineCodeArray {
 	struct _VirtualMachineCodeArray *(*copy)(struct _VirtualMachineCodeArray *, int base_offset);
 	void (*dump)(struct _VirtualMachineCodeArray *array);
 	void (*remove)(struct _VirtualMachineCodeArray *array, int num);
+	void (*reverse)(struct _VirtualMachineCodeArray *array);
 } VirtualMachineCodeArray;
 
 typedef struct _Compiler {

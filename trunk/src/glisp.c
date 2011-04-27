@@ -136,6 +136,10 @@ void glisp_start_script(char *file_name)
 				//vmcode->dump(vmcode);
 				VirtualMachine *vm = new_VirtualMachine();
 				c->compileToFastCode(vmcode);
+				VirtualMachineCode *thcode = new_VirtualMachineCode(NULL, 0);
+				thcode->op = OPTHCODE;
+				vmcode->add(vmcode, thcode);
+				vmcode->reverse(vmcode);
 				vm->run(vmcode);//direct threading compile time & not execute
 				if (c->isExecFlag) {
 					int ret = vm->run(vmcode);//execute

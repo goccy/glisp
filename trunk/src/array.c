@@ -26,6 +26,18 @@ static VirtualMachineCodeArray *VirtualMachineCodeArray_copy(VirtualMachineCodeA
 	return ret;
 }
 
+static void VirtualMachineCodeArray_reverse(VirtualMachineCodeArray *array)
+{
+	size_t i, j = 0;
+	VirtualMachineCode *tmp[MAX_STACK_SIZE] = {NULL};
+	for (i = 0; i < array->size; i++) {
+		tmp[i] = array->a[i];
+	}
+	for (i = 0, j = array->size - 1; i < array->size; i++, j--) {
+		array->a[i] = tmp[j];
+	}
+}
+
 static void VirtualMachineCodeArray_dump(VirtualMachineCodeArray *array)
 {
 	int i = 0;
@@ -56,5 +68,6 @@ VirtualMachineCodeArray *new_VirtualMachineCodeArray(void)
 	vm_array->copy = VirtualMachineCodeArray_copy;
 	vm_array->dump = VirtualMachineCodeArray_dump;
 	vm_array->remove = VirtualMachineCodeArray_remove;
+	vm_array->reverse = VirtualMachineCodeArray_reverse;
 	return vm_array;
 }
