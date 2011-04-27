@@ -82,9 +82,9 @@ void glisp_start_shell(void)
 				Compiler *c = new_Compiler();
 				VirtualMachineCodeArray *vmcode = c->compile(c, root->cdr);
 				VirtualMachine *vm = new_VirtualMachine();
-				int ret = vm->run(vmcode);
+				//int ret = vm->run(vmcode);
 				DBG_P("===================");
-				fprintf(stderr, "ans = [%d]\n", ret);
+				//fprintf(stderr, "ans = [%d]\n", ret);
 				//Conscell *ret = eval(root->cdr);
 				//displayResult(ret);
 				t->delete(token);
@@ -140,13 +140,15 @@ void glisp_start_script(char *file_name)
 				thcode->op = OPTHCODE;
 				vmcode->add(vmcode, thcode);
 				vmcode->reverse(vmcode);
-				vm->run(vmcode);//direct threading compile time & not execute
+				int vm_stack_top = vmcode->size - 1;
+				VirtualMachineCode *code = vmcode->getPureCode(vmcode);
+				vm->run(code);//direct threading compile time & not execute
 				if (c->isExecFlag) {
-					int ret = vm->run(vmcode);//execute
-					vm->setVariable(vmcode, ret);
+					int ret = vm->run(code);//execute
+					vm->setVariable(code, vm_stack_top, ret);
 					fprintf(stderr, "ans = [%d]\n", ret);
 				} else {
-					vm->setFunction(vmcode);
+					vm->setFunction(code, vm_stack_top);
 				}
 				vm->clear();
 				DBG_P("===================");

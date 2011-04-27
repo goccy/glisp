@@ -582,33 +582,31 @@ Compiler *new_Compiler(void)
 	return ret;
 }
 
-inline void VirtualMachine_createDirectThreadingCode(VirtualMachineCodeArray *vmcode, void **jmp_table)
+inline void VirtualMachine_createDirectThreadingCode(VirtualMachineCode *vmcode, void **jmp_table)
 {
-	(vmcode->a[0])->op = OPNOP;
-	VirtualMachineCode **pc = vmcode->a;
-	size_t i = 0;
-	for (i = 0; i < vmcode->size; i++) {
-		pc[i]->opnext = jmp_table[pc[i]->op];
+	vmcode->op = OPNOP;
+	VirtualMachineCode *pc = vmcode;
+	for (; pc->api != NULL; pc++) {
+		pc->opnext = jmp_table[pc->op];
 	}
 }
 
 #define L(op) L_##op
 #define CASE(op) L(op) :
-#define NEXTOP *((*pc)->opnext)
+#define NEXTOP *(pc->opnext)
 //#define FINISH *(opcodes[OPFINISH])
 
 static int function_arg_stack[MAX_STACK_SIZE] = {0};
 static int arg_stack_count = 0;
 static int cur_arg = -1; //this value is flag that copys pop num to all function argument
-static VirtualMachineCodeArray *local_cache_func_vmcode = NULL;
-static inline int VirtualMachine_run(VirtualMachineCodeArray *vmcode)
+static VirtualMachineCode *local_cache_func_vmcode = NULL;
+static int VirtualMachine_run(VirtualMachineCode *vmcode)
 {
 	//asm("int3");
 	DBG_P("=============<<< run >>>===================");
 	//vmcode->dump(vmcode);
 	int stack[MAX_STACK_SIZE] = {0};
-	//int vm_stack_top = vmcode->size;
-	//DBG_P("vmcode_size = [%d]", vm_stack_top);
+	//int *stack = _stack;
 	void *jmp_table[] = {
 		&&L(OPMOV), &&L(OPADD), &&L(OPSUB), &&L(OPMUL), &&L(OPDIV),
 		&&L(OPCALL), &&L(OPJMP), &&L(OPCMP), &&L(OPPOP), &&L(OPPUSH),
@@ -617,18 +615,18 @@ static inline int VirtualMachine_run(VirtualMachineCodeArray *vmcode)
 		&&L(OPiPUSHC), &&L(OPTHCODE), &&L(OPNOP),
 	};
 	//fprintf(stderr, "false_jump_register = [%d]\n", false_jump_register);
-	VirtualMachineCode **pc = vmcode->a;
-	goto *jmp_table[(*pc)->op];
+	VirtualMachineCode *pc = vmcode;
+	goto *jmp_table[pc->op];
 	
 	CASE(OPMOV) {
 		DBG_P("OPMOV");
-		stack[(*pc)->dst] = (*pc)->src;
+		stack[pc->dst] = pc->src;
 		pc++;
 		goto NEXTOP;
 	}
 	CASE(OPADD) {
 		DBG_P("OPADD");
-		stack[(*pc)->dst] += stack[(*pc)->src];
+		stack[pc->dst] += stack[pc->src];
 		pc++;
 		goto NEXTOP;
 	}
@@ -639,36 +637,36 @@ static inline int VirtualMachine_run(VirtualMachineCodeArray *vmcode)
 	}
 	CASE(OPSUB) {
 		DBG_P("OPSUB");
-		stack[(*pc)->dst] -= stack[(*pc)->src];
+		stack[pc->dst] -= stack[pc->src];
 		pc++;
 		goto NEXTOP;
 	}
 	CASE(OPiSUBC) {
 		DBG_P("OPiSUBC");
-		stack[(*pc)->dst] -= (*pc)->src;
+		stack[pc->dst] -= pc->src;
 		pc++;
 		goto NEXTOP;
 	}
 	CASE(OPMUL) {
 		DBG_P("OPMUL");
-		stack[(*pc)->dst] *= stack[(*pc)->src];
+		stack[pc->dst] *= stack[pc->src];
 		pc++;
 		goto NEXTOP;
 	}
 	CASE(OPDIV) {
 		DBG_P("OPDIV");
-		stack[(*pc)->dst] /= stack[(*pc)->src];
+		stack[pc->dst] /= stack[pc->src];
 		pc++;
 		goto NEXTOP;
 	}
 	CASE(OPCMP) {
 		DBG_P("OPCMP");
-		pc += (*pc)->dst;
+		pc += pc->dst;
 		goto NEXTOP;
 	}
 	CASE(OPJL) {
 		DBG_P("OPJL");
-		if (stack[(*pc)->dst] < stack[(*pc)->src] && isExecFlag) {
+		if (stack[pc->dst] < stack[pc->src] && isExecFlag) {
 			pc += 2;
 		} else {
 			pc += 3;
@@ -677,8 +675,8 @@ static inline int VirtualMachine_run(VirtualMachineCodeArray *vmcode)
 	}
 	CASE(OPiJLC) {
 		DBG_P("OPiJLC");
-		if (stack[(*pc)->dst] < (*pc)->src) {
-			pc += (*pc)->jmp;
+		if (stack[pc->dst] < pc->src) {
+			pc += pc->jmp;
 		} else {
 			pc++;
 		}
@@ -686,7 +684,7 @@ static inline int VirtualMachine_run(VirtualMachineCodeArray *vmcode)
 	}
 	CASE(OPJG) {
 		DBG_P("OPJG");
-		if (stack[(*pc)->dst] > stack[(*pc)->src]) {
+		if (stack[pc->dst] > stack[pc->src]) {
 			pc += 2;
 		} else {
 			pc += 3;
@@ -695,8 +693,8 @@ static inline int VirtualMachine_run(VirtualMachineCodeArray *vmcode)
 	}
 	CASE(OPiJGC) {
 		DBG_P("OPiJGC");
-		if (stack[(*pc)->dst] > (*pc)->src) {
-			pc += (*pc)->jmp;
+		if (stack[pc->dst] > pc->src) {
+			pc += pc->jmp;
 		} else {
 			pc++;
 		}
@@ -705,12 +703,12 @@ static inline int VirtualMachine_run(VirtualMachineCodeArray *vmcode)
 	CASE(OPLOAD) {
 		DBG_P("OPLOAD");
 		//load map from virtual memory
-		void *value = fetch_from_virtual_memory((*pc)->name);
+		void *value = fetch_from_virtual_memory(pc->name);
 		if (value == NULL) {
 			fprintf(stderr, "[ERROR] ) undefined variable\n");
 			return 0;
 		}
-		stack[(*pc)->dst] = (int)value;
+		stack[pc->dst] = (int)value;
 		pc++;
 		goto NEXTOP;
 	}
@@ -720,9 +718,9 @@ static inline int VirtualMachine_run(VirtualMachineCodeArray *vmcode)
 	}
 	CASE(OPCALL) {
 		DBG_P("OPCALL");
-		VirtualMachineCodeArray *func_vmcode = (VirtualMachineCodeArray *)fetch_from_virtual_memory((*pc)->name);
+		VirtualMachineCode *func_vmcode = (VirtualMachineCode *)fetch_from_virtual_memory(pc->name);
 		if (func_vmcode == NULL) {
-			fprintf(stderr, "[ERROR] ) undefined function name [%s]\n", (*pc)->name);
+			fprintf(stderr, "[ERROR] ) undefined function name [%s]\n", pc->name);
 			return 0;
 		}
 		local_cache_func_vmcode = func_vmcode;
@@ -731,7 +729,7 @@ static inline int VirtualMachine_run(VirtualMachineCodeArray *vmcode)
 		DBG_P("res = [%d]", res);
 		arg_stack_count--;
 		cur_arg = -1;
-		stack[(*pc)->dst] = res;
+		stack[pc->dst] = res;
 		pc++;
 		goto NEXTOP;
 	}
@@ -745,14 +743,14 @@ static inline int VirtualMachine_run(VirtualMachineCodeArray *vmcode)
 		DBG_P("res = [%d]", res);
 		arg_stack_count--;
 		cur_arg = -1;
-		stack[(*pc)->dst] = res;
+		stack[pc->dst] = res;
 		pc++;
 		goto NEXTOP;
 	}
 	CASE(OPPUSH) {
 		DBG_P("OPPUSH");
 		arg_stack_count++;
-		function_arg_stack[arg_stack_count] = stack[(*pc)->dst];
+		function_arg_stack[arg_stack_count] = stack[pc->dst];
 		DBG_P("function_arg_stack[arg_stack_count] = [%d]", function_arg_stack[arg_stack_count]);
 		cur_arg = -1;
 		pc++;
@@ -761,7 +759,7 @@ static inline int VirtualMachine_run(VirtualMachineCodeArray *vmcode)
 	CASE(OPiPUSHC) {
 		DBG_P("OPiPUSH");
 		arg_stack_count++;
-		function_arg_stack[arg_stack_count] = (*pc)->src;
+		function_arg_stack[arg_stack_count] = pc->src;
 		cur_arg = -1;
 		pc++;
 		goto NEXTOP;
@@ -772,8 +770,8 @@ static inline int VirtualMachine_run(VirtualMachineCodeArray *vmcode)
 			DBG_P("function_arg_stack[arg_stack_count] = [%d]", function_arg_stack[arg_stack_count]);
 			cur_arg = function_arg_stack[arg_stack_count];
 		}
-		stack[(*pc)->dst] = cur_arg;
-		DBG_P("stack[%d] = [%d]", (*pc)->dst, (*pc)->src);
+		stack[pc->dst] = cur_arg;
+		DBG_P("stack[%d] = [%d]", pc->dst, pc->src);
 		pc++;
 		goto NEXTOP;
 	}
@@ -789,7 +787,7 @@ static inline int VirtualMachine_run(VirtualMachineCodeArray *vmcode)
 	}
 	CASE(OPRET) {
 		DBG_P("OPRET");
-		stack[0] = stack[(*pc)->src];
+		stack[0] = stack[pc->src];
 		pc++;
 		DBG_P("stack[0] = [%d]", stack[0]);
 		DBG_P("arg_stack_count = [%d]", arg_stack_count);
@@ -797,17 +795,17 @@ static inline int VirtualMachine_run(VirtualMachineCodeArray *vmcode)
 	}
 }
 
-static void VirtualMachine_setVariable(VirtualMachineCodeArray *vmcode, int var)
+static void VirtualMachine_setVariable(VirtualMachineCode *vmcode, int size, int var)
 {
 	if (isSetFlag && isSETQ) {
 		//variable
 		DBG_P("execute set variable");
 		VirtualMachineCode *store = NULL;
-		int vm_stack_top = vmcode->size - 1;
-		if (vmcode->a[vm_stack_top]->op == OPSTORE) {
-			store = vmcode->a[vm_stack_top];
-		} else if (vmcode->a[vm_stack_top - 1]->op == OPSTORE) {
-			store = vmcode->a[vm_stack_top - 1];
+		//int vm_stack_top = vmcode->size - 1;
+		if ((vmcode + size)->op == OPSTORE) {
+			store = vmcode + size;
+		} else if ((vmcode + size - 1)->op == OPSTORE) {
+			store = vmcode + size - 1;
 		} else {
 			DBG_P("OPSTORE is cannnot find because isSETQ flag is true");
 		}
@@ -818,16 +816,16 @@ static void VirtualMachine_setVariable(VirtualMachineCodeArray *vmcode, int var)
 	}
 }
 
-static void VirtualMachine_setFunction(VirtualMachineCodeArray *vmcode)
+static void VirtualMachine_setFunction(VirtualMachineCode *vmcode, int size)
 {
 	if (isSetFlag && isDEFUN) {
 		DBG_P("store vmcode to virtual memory");
 		VirtualMachineCode *store = NULL;
-		int vm_stack_top = vmcode->size - 1;
-		if (vmcode->a[vm_stack_top]->op == OPSTORE) {
-			store = vmcode->a[vm_stack_top];
-		} else if (vmcode->a[vm_stack_top - 1]->op == OPSTORE) {
-			store = vmcode->a[vm_stack_top - 1];
+		//int vm_stack_top = vmcode->size - 1;
+		if ((vmcode + size)->op == OPSTORE) {
+			store = vmcode + size;
+		} else if ((vmcode + size - 1)->op == OPSTORE) {
+			store = vmcode + size - 1;
 		} else {
 			DBG_P("OPSTORE is cannnot find because isDEFUN flag is true");
 		}

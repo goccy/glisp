@@ -132,6 +132,7 @@ typedef struct _VirtualMachineCodeArray {
 	void (*dump)(struct _VirtualMachineCodeArray *array);
 	void (*remove)(struct _VirtualMachineCodeArray *array, int num);
 	void (*reverse)(struct _VirtualMachineCodeArray *array);
+	VirtualMachineCode *(*getPureCode)(struct _VirtualMachineCodeArray *array);
 } VirtualMachineCodeArray;
 
 typedef struct _Compiler {
@@ -142,9 +143,9 @@ typedef struct _Compiler {
 } Compiler;
 
 typedef struct _VirtualMachine {
-	int (*run)(VirtualMachineCodeArray *vmcode);
-	void (*setVariable)(VirtualMachineCodeArray *vmcode, int var);
-	void (*setFunction)(VirtualMachineCodeArray *vmcode);
+	int (*run)(VirtualMachineCode *vmcode);
+	void (*setVariable)(VirtualMachineCode *vmcode, int size, int var);
+	void (*setFunction)(VirtualMachineCode *vmcode, int size);
 	void (*clear)(void);
 } VirtualMachine;
 

@@ -59,6 +59,19 @@ static void VirtualMachineCodeArray_remove(VirtualMachineCodeArray *array, int n
 	array->size--;
 }
 
+static VirtualMachineCode _code[MAX_STACK_SIZE];
+static VirtualMachineCode *VirtualMachineCodeArray_getPureCode(VirtualMachineCodeArray *array)
+{
+	size_t i = 0;
+	for (i = 0; i < array->size; i++) {
+		_code[i] = *array->a[i];
+	}
+	VirtualMachineCode *code = (VirtualMachineCode *)gmalloc(sizeof(VirtualMachineCode) * MAX_STACK_SIZE);
+	memcpy(code, _code, sizeof(VirtualMachineCode) * MAX_STACK_SIZE);
+	memset(_code, 0, sizeof(VirtualMachineCode) * MAX_STACK_SIZE);
+	return code;
+}
+
 VirtualMachineCodeArray *new_VirtualMachineCodeArray(void)
 {
 	VirtualMachineCodeArray *vm_array = (VirtualMachineCodeArray *)gmalloc(sizeof(VirtualMachineCodeArray));
@@ -70,5 +83,6 @@ VirtualMachineCodeArray *new_VirtualMachineCodeArray(void)
 	vm_array->dump = VirtualMachineCodeArray_dump;
 	vm_array->remove = VirtualMachineCodeArray_remove;
 	vm_array->reverse = VirtualMachineCodeArray_reverse;
+	vm_array->getPureCode = VirtualMachineCodeArray_getPureCode;
 	return vm_array;
 }
