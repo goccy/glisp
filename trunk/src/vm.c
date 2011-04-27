@@ -609,18 +609,17 @@ inline void VirtualMachine_createDirectThreadingCode(VirtualMachineCode *vmcode,
 #define CASE(op) L(op) :
 #define DISPATCH_START goto *jmp_table[pc->op]
 #define NEXTOP *(pc->opnext)
-#define MAX_REG_SIZE 8
+#define MAX_REG_SIZE 6
 
 static int function_arg_stack[MAX_STACK_SIZE] = {0};
 static int arg_stack_count = 0;
-static int cur_arg = -1; //this value is flag that copys pop num to all function argument
 static VirtualMachineCode *local_cache_func_vmcode = NULL;
+static int cur_arg = -1; //this value is flag that copys pop num to all function argument
 static int VirtualMachine_run(VirtualMachineCode *vmcode)
 {
 	DBG_P("=============<<< run >>>===================");
 	//vmcode->dump(vmcode);
 	int reg[MAX_REG_SIZE] = {0};
-	
 	static void *jmp_table[] = {
 		&&L(OPMOV), &&L(OPADD), &&L(OPSUB), &&L(OPMUL), &&L(OPDIV),
 		&&L(OPCALL), &&L(OPJMP), &&L(OPCMP), &&L(OPPOP), &&L(OPPUSH),
