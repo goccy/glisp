@@ -605,9 +605,9 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 	//asm("int3");
 	DBG_P("=============<<< run >>>===================");
 	//vmcode->dump(vmcode);
-	int stack[MAX_STACK_SIZE] = {0};
-	//int *stack = _stack;
-	void *jmp_table[] = {
+	int stack[8] = {0};
+	
+	static void *jmp_table[] = {
 		&&L(OPMOV), &&L(OPADD), &&L(OPSUB), &&L(OPMUL), &&L(OPDIV),
 		&&L(OPCALL), &&L(OPJMP), &&L(OPCMP), &&L(OPPOP), &&L(OPPUSH),
 		&&L(OPRET), &&L(OPJL), &&L(OPJG), &&L(OPSTORE), &&L(OPLOAD),
@@ -616,8 +616,11 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 	};
 	//fprintf(stderr, "false_jump_register = [%d]\n", false_jump_register);
 	VirtualMachineCode *pc = vmcode;
+	//push(&&L_return);
 	goto *jmp_table[pc->op];
 	
+//L_return:
+	//return;
 	CASE(OPMOV) {
 		DBG_P("OPMOV");
 		stack[pc->dst] = pc->src;
@@ -737,8 +740,25 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 		pc++;
 		goto NEXTOP;
 	}
+	/*
+	CASE(new_return){
+		void *addr = pop();
+		goto addr;
+	}
+	*/
 	CASE(OPFASTCALL) {
 		DBG_P("OPFASTCALL");
+		/*
+		push(pc);
+		push(&&L_call_after);
+		pc = pc->bytecodes;
+		goto pc->addr;
+	L_call_after:;
+		pc = pop();
+		...
+			pc++;
+			goto NEXTOP;
+		*/
 		int res = VirtualMachine_run(local_cache_func_vmcode);
 		DBG_P("res = [%d]", res);
 		arg_stack_count--;
