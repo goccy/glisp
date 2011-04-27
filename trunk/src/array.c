@@ -63,6 +63,7 @@ VirtualMachineCodeArray *new_VirtualMachineCodeArray(void)
 {
 	VirtualMachineCodeArray *vm_array = (VirtualMachineCodeArray *)gmalloc(sizeof(VirtualMachineCodeArray));
 	vm_array->a = (VirtualMachineCode **)gmalloc(sizeof(VirtualMachineCode) * MAX_STACK_SIZE);
+	//vm_array->a[MAX_STACK_SIZE] = {NULL};
 	vm_array->size = 0;
 	vm_array->add = VirtualMachineCodeArray_add;
 	vm_array->copy = VirtualMachineCodeArray_copy;

@@ -125,6 +125,7 @@ typedef struct VirtualMachineCodeAPI {
 
 typedef struct _VirtualMachineCodeArray {
 	VirtualMachineCode **a; /* original array */
+	//VirtualMachineCode a[MAX_STACK_SIZE]; /* original array */
 	size_t size; /* current vmcode size */
 	void (*add)(struct _VirtualMachineCodeArray *array, VirtualMachineCode *code);
 	struct _VirtualMachineCodeArray *(*copy)(struct _VirtualMachineCodeArray *, int base_offset);

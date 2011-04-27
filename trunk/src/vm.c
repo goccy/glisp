@@ -206,8 +206,6 @@ VirtualMachineCode *new_VirtualMachineCode(Conscell *c, int base_count)
 		ret->op = OPPUSH;
 		ret->dst = stack_count + base_count;
 		ret->src = c->num;
-		//ret->dst = c->num;
-		//ret->src = -1;
 		stack_count++;
 		false_jump_register++;
 		break;
@@ -216,7 +214,6 @@ VirtualMachineCode *new_VirtualMachineCode(Conscell *c, int base_count)
 		ret->dst = false_jump_register + 2;
 		ret->src = -1;
 		false_jump_register++;
-		//ret->src = base_count;
 		break;
 	case LESS:
 		ret->op = OPJL;
@@ -473,7 +470,7 @@ static void Compiler_compileToFastCode(VirtualMachineCodeArray *vmcode)
 	VirtualMachineCode **pc = vmcode->a;// + vm_stack_top - 1;
 	const char *set_name = NULL;
 	if (isSetFlag) {
-		set_name = vmcode->a[2]->name;//pc[0] ==> OPRET, pc[1] ==> OPSTORE
+		set_name = vmcode->a[1]->name;//pc[0] ==> OPRET, pc[1] ==> OPSTORE
 	}
 	int i = 0;
 	int jl_register = 0;
@@ -608,7 +605,7 @@ static inline int VirtualMachine_run(VirtualMachineCodeArray *vmcode)
 {
 	//asm("int3");
 	DBG_P("=============<<< run >>>===================");
-	vmcode->dump(vmcode);
+	//vmcode->dump(vmcode);
 	int stack[MAX_STACK_SIZE] = {0};
 	//int vm_stack_top = vmcode->size;
 	//DBG_P("vmcode_size = [%d]", vm_stack_top);
