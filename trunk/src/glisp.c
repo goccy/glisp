@@ -81,8 +81,24 @@ void glisp_start_shell(void)
 				Conscell *root = p->parse(token);
 				Compiler *c = new_Compiler();
 				VirtualMachineCodeArray *vmcode = c->compile(c, root->cdr);
+				//vmcode->dump(vmcode);
 				VirtualMachine *vm = new_VirtualMachine();
-				//int ret = vm->run(vmcode);
+				c->compileToFastCode(vmcode);
+				VirtualMachineCode *thcode = new_VirtualMachineCode(NULL, 0);
+				thcode->op = OPTHCODE;
+				vmcode->add(vmcode, thcode);
+				vmcode->reverse(vmcode);
+				int vm_stack_top = vmcode->size - 1;
+				VirtualMachineCode *code = vmcode->getPureCode(vmcode);
+				vm->run(code);//direct threading compile time & not execute
+				if (c->isExecFlag) {
+					int ret = vm->run(code);//execute
+					vm->setVariable(code, vm_stack_top, ret);
+					fprintf(stderr, "ans = [%d]\n", ret);
+				} else {
+					vm->setFunction(code, vm_stack_top);
+				}
+				vm->clear();
 				DBG_P("===================");
 				//fprintf(stderr, "ans = [%d]\n", ret);
 				//Conscell *ret = eval(root->cdr);
@@ -133,16 +149,17 @@ void glisp_start_script(char *file_name)
 				Conscell *root = p->parse(token);
 				Compiler *c = new_Compiler();
 				VirtualMachineCodeArray *vmcode = c->compile(c, root->cdr);
-				//vmcode->dump(vmcode);
 				VirtualMachine *vm = new_VirtualMachine();
 				c->compileToFastCode(vmcode);
 				VirtualMachineCode *thcode = new_VirtualMachineCode(NULL, 0);
 				thcode->op = OPTHCODE;
 				vmcode->add(vmcode, thcode);
 				vmcode->reverse(vmcode);
-				int vm_stack_top = vmcode->size - 1;
+				vmcode->dump(vmcode);
 				VirtualMachineCode *code = vmcode->getPureCode(vmcode);
 				vm->run(code);//direct threading compile time & not execute
+				int vm_stack_top = vmcode->size - 2;
+				code++;//Skip OPNOP
 				if (c->isExecFlag) {
 					int ret = vm->run(code);//execute
 					vm->setVariable(code, vm_stack_top, ret);
