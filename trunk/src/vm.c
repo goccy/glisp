@@ -116,6 +116,9 @@ static void VirtualMachineCode_dump(VirtualMachineCode *code)
 	case OPiPUSHC:
 		DBG_PL("OPiPUSHC : ");
 		break;
+	case OPCOPY:
+		DBG_PL("OPCOPY : ");
+		break;
 	case OPTHCODE:
 		DBG_PL("OPTHCODE : ");
 		break;
@@ -474,6 +477,7 @@ static void Compiler_compileToFastCode(VirtualMachineCodeArray *vmcode)
 	}
 	int i = 0;
 	int jl_register = 0;
+	int isFirstPOPFlag = 1;
 	for (i = vm_stack_top - 1; i > 0; i--) {
 		switch (vmcode->a[i]->op) {
 		case OPCALL:
@@ -486,8 +490,18 @@ static void Compiler_compileToFastCode(VirtualMachineCodeArray *vmcode)
 		case OPLOAD:
 			if (local_func_code != NULL && search_func_args_from_vmcode(local_func_code, pc[i]->name)) {
 				DBG_P("This variable is function's argument!!");
-				DBG_P("convert virtual machine code from OPLOAD to OPPOP");
-				pc[i]->op = OPPOP;
+				if (isFirstPOPFlag) {
+					DBG_P("convert virtual machine code from OPLOAD to OPPOP");
+					pc[i]->op = OPPOP;
+					isFirstPOPFlag = 0;
+				} else if (pc[i + 1]->op == OPFASTCALL ||
+						   pc[i + 2]->op == OPFASTCALL) {
+					DBG_P("convert virtual machine code from OPLOAD to OPPOP");
+					pc[i]->op = OPPOP;
+				} else {
+					DBG_P("convert virtual machine code from OPLOAD to OPCOPY");
+					pc[i]->op = OPCOPY;
+				}
 			}
 			break;
 		case OPJL:
@@ -593,8 +607,9 @@ inline void VirtualMachine_createDirectThreadingCode(VirtualMachineCode *vmcode,
 
 #define L(op) L_##op
 #define CASE(op) L(op) :
+#define DISPATCH_START goto *jmp_table[pc->op]
 #define NEXTOP *(pc->opnext)
-//#define FINISH *(opcodes[OPFINISH])
+#define MAX_REG_SIZE 8
 
 static int function_arg_stack[MAX_STACK_SIZE] = {0};
 static int arg_stack_count = 0;
@@ -602,34 +617,32 @@ static int cur_arg = -1; //this value is flag that copys pop num to all function
 static VirtualMachineCode *local_cache_func_vmcode = NULL;
 static int VirtualMachine_run(VirtualMachineCode *vmcode)
 {
-	//asm("int3");
 	DBG_P("=============<<< run >>>===================");
 	//vmcode->dump(vmcode);
-	int stack[8] = {0};
+	int reg[MAX_REG_SIZE] = {0};
 	
 	static void *jmp_table[] = {
 		&&L(OPMOV), &&L(OPADD), &&L(OPSUB), &&L(OPMUL), &&L(OPDIV),
 		&&L(OPCALL), &&L(OPJMP), &&L(OPCMP), &&L(OPPOP), &&L(OPPUSH),
 		&&L(OPRET), &&L(OPJL), &&L(OPJG), &&L(OPSTORE), &&L(OPLOAD),
 		&&L(OPiADDC), &&L(OPiSUBC), &&L(OPiJLC), &&L(OPiJGC), &&L(OPFASTCALL),
-		&&L(OPiPUSHC), &&L(OPTHCODE), &&L(OPNOP),
+		&&L(OPiPUSHC), &&L(OPCOPY), &&L(OPTHCODE), &&L(OPNOP),
 	};
-	//fprintf(stderr, "false_jump_register = [%d]\n", false_jump_register);
+	
 	VirtualMachineCode *pc = vmcode;
 	//push(&&L_return);
-	goto *jmp_table[pc->op];
-	
+	DISPATCH_START;
 //L_return:
 	//return;
 	CASE(OPMOV) {
 		DBG_P("OPMOV");
-		stack[pc->dst] = pc->src;
+		reg[pc->dst] = pc->src;
 		pc++;
 		goto NEXTOP;
 	}
 	CASE(OPADD) {
 		DBG_P("OPADD");
-		stack[pc->dst] += stack[pc->src];
+		reg[pc->dst] += reg[pc->src];
 		pc++;
 		goto NEXTOP;
 	}
@@ -640,25 +653,25 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 	}
 	CASE(OPSUB) {
 		DBG_P("OPSUB");
-		stack[pc->dst] -= stack[pc->src];
+		reg[pc->dst] -= reg[pc->src];
 		pc++;
 		goto NEXTOP;
 	}
 	CASE(OPiSUBC) {
 		DBG_P("OPiSUBC");
-		stack[pc->dst] -= pc->src;
+		reg[pc->dst] -= pc->src;
 		pc++;
 		goto NEXTOP;
 	}
 	CASE(OPMUL) {
 		DBG_P("OPMUL");
-		stack[pc->dst] *= stack[pc->src];
+		reg[pc->dst] *= reg[pc->src];
 		pc++;
 		goto NEXTOP;
 	}
 	CASE(OPDIV) {
 		DBG_P("OPDIV");
-		stack[pc->dst] /= stack[pc->src];
+		reg[pc->dst] /= reg[pc->src];
 		pc++;
 		goto NEXTOP;
 	}
@@ -669,7 +682,7 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 	}
 	CASE(OPJL) {
 		DBG_P("OPJL");
-		if (stack[pc->dst] < stack[pc->src] && isExecFlag) {
+		if (reg[pc->dst] < reg[pc->src] && isExecFlag) {
 			pc += 2;
 		} else {
 			pc += 3;
@@ -678,7 +691,7 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 	}
 	CASE(OPiJLC) {
 		DBG_P("OPiJLC");
-		if (stack[pc->dst] < pc->src) {
+		if (reg[pc->dst] < pc->src) {
 			pc += pc->jmp;
 		} else {
 			pc++;
@@ -687,7 +700,7 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 	}
 	CASE(OPJG) {
 		DBG_P("OPJG");
-		if (stack[pc->dst] > stack[pc->src]) {
+		if (reg[pc->dst] > reg[pc->src]) {
 			pc += 2;
 		} else {
 			pc += 3;
@@ -696,7 +709,7 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 	}
 	CASE(OPiJGC) {
 		DBG_P("OPiJGC");
-		if (stack[pc->dst] > pc->src) {
+		if (reg[pc->dst] > pc->src) {
 			pc += pc->jmp;
 		} else {
 			pc++;
@@ -711,7 +724,7 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 			fprintf(stderr, "[ERROR] ) undefined variable\n");
 			return 0;
 		}
-		stack[pc->dst] = (int)value;
+		reg[pc->dst] = (int)value;
 		pc++;
 		goto NEXTOP;
 	}
@@ -731,8 +744,7 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 		int res = VirtualMachine_run(func_vmcode);
 		DBG_P("res = [%d]", res);
 		arg_stack_count--;
-		cur_arg = -1;
-		stack[pc->dst] = res;
+		reg[pc->dst] = res;
 		pc++;
 		goto NEXTOP;
 	}
@@ -762,17 +774,15 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 		int res = VirtualMachine_run(local_cache_func_vmcode);
 		DBG_P("res = [%d]", res);
 		arg_stack_count--;
-		cur_arg = -1;
-		stack[pc->dst] = res;
+		reg[pc->dst] = res;
 		pc++;
 		goto NEXTOP;
 	}
 	CASE(OPPUSH) {
 		DBG_P("OPPUSH");
 		arg_stack_count++;
-		function_arg_stack[arg_stack_count] = stack[pc->dst];
+		function_arg_stack[arg_stack_count] = reg[pc->dst];
 		DBG_P("function_arg_stack[arg_stack_count] = [%d]", function_arg_stack[arg_stack_count]);
-		cur_arg = -1;
 		pc++;
 		goto NEXTOP;
 	}
@@ -780,18 +790,22 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 		DBG_P("OPiPUSH");
 		arg_stack_count++;
 		function_arg_stack[arg_stack_count] = pc->src;
-		cur_arg = -1;
 		pc++;
 		goto NEXTOP;
 	}
 	CASE(OPPOP) {
 		DBG_P("OPPOP");
-		if (cur_arg == -1) {
-			DBG_P("function_arg_stack[arg_stack_count] = [%d]", function_arg_stack[arg_stack_count]);
-			cur_arg = function_arg_stack[arg_stack_count];
-		}
-		stack[pc->dst] = cur_arg;
-		DBG_P("stack[%d] = [%d]", pc->dst, pc->src);
+		DBG_P("function_arg_stack[arg_stack_count] = [%d]", function_arg_stack[arg_stack_count]);
+		cur_arg = function_arg_stack[arg_stack_count];
+		reg[pc->dst] = cur_arg;
+		DBG_P("reg[%d] = [%d]", pc->dst, cur_arg);
+		pc++;
+		goto NEXTOP;
+	}
+	CASE(OPCOPY) {
+		DBG_P("OPCOPY");
+		reg[pc->dst] = cur_arg;
+		DBG_P("reg[%d] = [%d]", pc->dst, cur_arg);
 		pc++;
 		goto NEXTOP;
 	}
@@ -807,11 +821,11 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 	}
 	CASE(OPRET) {
 		DBG_P("OPRET");
-		stack[0] = stack[pc->src];
+		reg[0] = reg[pc->src];
 		pc++;
-		DBG_P("stack[0] = [%d]", stack[0]);
+		DBG_P("reg[0] = [%d]", reg[0]);
 		DBG_P("arg_stack_count = [%d]", arg_stack_count);
-		return stack[0];
+		return reg[0];
 	}
 }
 

@@ -102,6 +102,7 @@ typedef enum {
 	OPiJGC,
 	OPFASTCALL,
 	OPiPUSHC,
+	OPCOPY,
 	OPTHCODE,
 	OPNOP,
 } OpCode;
