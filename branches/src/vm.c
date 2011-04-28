@@ -957,10 +957,10 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 	//vmcode->dump(vmcode);
 	//int reg[max_reg_size];// = {0};
 	int reg[MAX_REG_SIZE] = {0};
-	volatile int eax = 0;
-	volatile int ebx = 0;
-	volatile int ecx = 0;
-	volatile int edx = 0;
+	int eax = 0;
+	int ebx = 0;
+	int ecx = 0;
+	int edx = 0;
 	static void *jmp_table[] = {
 		&&L(OPMOV), &&L(OPADD), &&L(OPSUB), &&L(OPMUL), &&L(OPDIV),
 		&&L(OPCALL), &&L(OPJMP), &&L(OPCMP), &&L(OPPOP), &&L(OPPUSH),
