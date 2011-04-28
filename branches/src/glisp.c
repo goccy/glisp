@@ -51,17 +51,28 @@ static void glisp_main(Tokenizer *t, Parser *p, char *line)
 		thcode->op = OPTHCODE;
 		vmcode->add(vmcode, thcode);
 		c->fixRegNumber(vmcode);
+		int isFinalCompile = 0;
 		if (c->getMaxRegNumber(vmcode) < 4) {
 			c->finalCompile(vmcode);
+			isFinalCompile = 1;
 		}
 		vmcode->reverse(vmcode);
 		vmcode->dump(vmcode);
 		VirtualMachineCode *code = vmcode->getPureCode(vmcode);
-		vm->run(code);//direct threading compile time & not execute
+		if (isFinalCompile) {
+			vm->fastRun(code);//direct threading compile time & not execute
+		} else {
+			vm->run(code);//direct threading compile time & not execute
+		}
 		int vm_stack_top = vmcode->size - 2;
 		code++;//Skip OPNOP
 		if (c->isExecFlag) {
-			int ret = vm->run(code);//execute
+			int ret = 0;
+			if (isFinalCompile) {
+				ret = vm->fastRun(code);//execute
+			} else {
+				ret = vm->run(code);//execute
+			}
 			vm->setVariable(code, vm_stack_top, ret);
 			fprintf(stderr, "%d\n", ret);
 			free(--code);

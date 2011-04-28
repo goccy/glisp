@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -O2 -g0 -Wall -W  -I./include/ -I/opt/local/include/ # -pipe -fomit-frame-pointer -funroll-loops -fprefetch-loop-arrays -falign-functions=4 -fforce-addr -floop-optimize -fschedule-insns
-#CFLAGS = -O0 -g3 -Wall -W -I./include/ -I/opt/local/include/  #-pipe -fomit-frame-pointer -funroll-loops -fprefetch-loop-arrays -falign-functions=4 -fforce-addr -floop-optimize -fschedule-insns
+#CFLAGS = -O0 -g3 -DDEBUG_MODE -Wall -W -I./include/ -I/opt/local/include/  #-pipe -fomit-frame-pointer -funroll-loops -fprefetch-loop-arrays -falign-functions=4 -fforce-addr -floop-optimize -fschedule-insns
 LDLIBS = -L/opt/local/lib/ -lreadline
 
 target = glisp

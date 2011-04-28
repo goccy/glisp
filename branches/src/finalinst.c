@@ -30,22 +30,22 @@ CASE(OPCDADD) {
 }
 CASE(OPAiADDC) {
 	DBG_P("OPAiADDC : ");
-	eax += reg[pc->src];
+	eax += pc->src;
 	pc++; goto NEXTOP;
 }
 CASE(OPBiADDC) {
 	DBG_P("OPBiADDC : ");
-	ebx += reg[pc->src];
+	ebx += pc->src;
 	pc++; goto NEXTOP;
 }
 CASE(OPCiADDC) {
 	DBG_P("OPCiADDC : ");
-	ecx += reg[pc->src];
+	ecx += pc->src;
 	pc++; goto NEXTOP;
 }
 CASE(OPDiADDC) {
 	DBG_P("OPDiADDC : ");
-	edx += reg[pc->src];
+	edx += pc->src;
 	pc++; goto NEXTOP;
 }
 CASE(OPAiSUBC) {
@@ -238,7 +238,7 @@ CASE(OPDiJGC) {
 }
 CASE(OPAFASTCALL) {
 	DBG_P("OPAFASTCALL : ");
-	int res = VirtualMachine_run(local_cache_func_vmcode);
+	int res = VirtualMachine_fastRun(local_cache_func_vmcode);
 	DBG_P("res = [%d]", res);
 	arg_stack_count--;
 	eax = res;
@@ -246,7 +246,7 @@ CASE(OPAFASTCALL) {
 }
 CASE(OPBFASTCALL) {
 	DBG_P("OPBFASTCALL : ");
-	int res = VirtualMachine_run(local_cache_func_vmcode);
+	int res = VirtualMachine_fastRun(local_cache_func_vmcode);
 	DBG_P("res = [%d]", res);
 	arg_stack_count--;
 	ebx = res;
@@ -254,7 +254,7 @@ CASE(OPBFASTCALL) {
 }
 CASE(OPCFASTCALL) {
 	DBG_P("OPCFASTCALL : ");
-	int res = VirtualMachine_run(local_cache_func_vmcode);
+	int res = VirtualMachine_fastRun(local_cache_func_vmcode);
 	DBG_P("res = [%d]", res);
 	arg_stack_count--;
 	ecx = res;
@@ -262,7 +262,7 @@ CASE(OPCFASTCALL) {
 }
 CASE(OPDFASTCALL) {
 	DBG_P("OPDFASTCALL : ");
-	int res = VirtualMachine_run(local_cache_func_vmcode);
+	int res = VirtualMachine_fastRun(local_cache_func_vmcode);
 	DBG_P("res = [%d]", res);
 	arg_stack_count--;
 	edx = res;

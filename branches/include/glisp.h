@@ -201,6 +201,7 @@ typedef struct _Compiler {
 
 typedef struct _VirtualMachine {
 	int (*run)(VirtualMachineCode *vmcode);
+	int (*fastRun)(VirtualMachineCode *vmcode);
 	void (*setVariable)(VirtualMachineCode *vmcode, int size, int var);
 	void (*setFunction)(VirtualMachineCode *vmcode, int size);
 	void (*clear)(void);

@@ -944,7 +944,7 @@ inline void VirtualMachine_createDirectThreadingCode(VirtualMachineCode *vmcode,
 #define CASE(op) L(op) :
 #define DISPATCH_START goto *jmp_table[pc->op]
 #define NEXTOP *(pc->opnext)
-#define MAX_REG_SIZE 0
+#define MAX_REG_SIZE 32
 //#define MAX_REG_SIZE 8 //Eight is faster than six at build server
 
 static int function_arg_stack[MAX_STACK_SIZE] = {0};
@@ -955,32 +955,14 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 {
 	DBG_P("=============<<< run >>>===================");
 	//vmcode->dump(vmcode);
-	//int reg[max_reg_size];// = {0};
+	//int reg[max_reg_size];
 	int reg[MAX_REG_SIZE] = {0};
-	int eax = 0;
-	int ebx = 0;
-	int ecx = 0;
-	int edx = 0;
 	static void *jmp_table[] = {
 		&&L(OPMOV), &&L(OPADD), &&L(OPSUB), &&L(OPMUL), &&L(OPDIV),
 		&&L(OPCALL), &&L(OPJMP), &&L(OPCMP), &&L(OPPOP), &&L(OPPUSH),
 		&&L(OPRET), &&L(OPJL), &&L(OPJG), &&L(OPSTORE), &&L(OPLOAD),
 		&&L(OPiADDC), &&L(OPiSUBC), &&L(OPiJLC), &&L(OPiJGC), &&L(OPFASTCALL),
 		&&L(OPiPUSHC), &&L(OPCOPY), &&L(OPTHCODE), &&L(OPNOP),
-		/*FINAL INST*/
-		&&L(OPABADD), &&L(OPACADD), &&L(OPADADD), &&L(OPBCADD),	&&L(OPBDADD),
-		&&L(OPCDADD), 
-		&&L(OPAiADDC), &&L(OPBiADDC), &&L(OPCiADDC), &&L(OPDiADDC),
-		&&L(OPAiSUBC), &&L(OPBiSUBC), &&L(OPCiSUBC), &&L(OPDiSUBC), 
-		&&L(OPAPOP), &&L(OPBPOP), &&L(OPCPOP), &&L(OPDPOP),
-		&&L(OPAPUSH), &&L(OPBPUSH),	&&L(OPCPUSH), &&L(OPDPUSH),
-		&&L(OPAiPUSHC),	&&L(OPBiPUSHC),	&&L(OPCiPUSHC),	&&L(OPDiPUSHC),
-		&&L(OPACOPY), &&L(OPBCOPY), &&L(OPCCOPY), &&L(OPDCOPY),
-		&&L(OPAiJLC), &&L(OPBiJLC), &&L(OPCiJLC), &&L(OPDiJLC),
-		&&L(OPAiJGC), &&L(OPBiJGC),	&&L(OPCiJGC), &&L(OPDiJGC),
-		&&L(OPAFASTCALL), &&L(OPBFASTCALL), &&L(OPCFASTCALL), &&L(OPDFASTCALL),
-		&&L(OPARET), &&L(OPBRET), &&L(OPCRET), &&L(OPDRET),
-		&&L(OPAMOV), &&L(OPBMOV), &&L(OPCMOV), &&L(OPDMOV),
 	};
 	VirtualMachineCode *pc = vmcode;
 	DISPATCH_START;
@@ -1075,7 +1057,7 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 			fprintf(stderr, "[ERROR] ) undefined variable\n");
 			return 0;
 		}
-		reg[pc->dst] = (intptr_t)value;
+		reg[pc->dst] = (int)value;
 		pc++;
 		goto NEXTOP;
 	}
@@ -1096,7 +1078,6 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 		DBG_P("OPCALL: res = [%d]", res);
 		arg_stack_count--;
 		reg[pc->dst] = res;
-		eax = res;
 		pc++;
 		goto NEXTOP;
 	}
@@ -1178,6 +1159,82 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 		DBG_P("arg_stack_count = [%d]", arg_stack_count);
 		return reg[0];
 	}
+}
+
+static int VirtualMachine_fastRun(VirtualMachineCode *vmcode)
+{
+	DBG_P("=============<<< run >>>===================");
+	int eax = 0;
+	int ebx = 0;
+	int ecx = 0;
+	int edx = 0;
+	static void *jmp_table[] = {
+		&&L(OPMOV), &&L(OPADD), &&L(OPSUB), &&L(OPMUL), &&L(OPDIV),
+		&&L(OPCALL), &&L(OPJMP), &&L(OPCMP), &&L(OPPOP), &&L(OPPUSH),
+		&&L(OPRET), &&L(OPJL), &&L(OPJG), &&L(OPSTORE), &&L(OPLOAD),
+		&&L(OPiADDC), &&L(OPiSUBC), &&L(OPiJLC), &&L(OPiJGC), &&L(OPFASTCALL),
+		&&L(OPiPUSHC), &&L(OPCOPY), &&L(OPTHCODE), &&L(OPNOP),
+		/*FINAL INST*/
+		&&L(OPABADD), &&L(OPACADD), &&L(OPADADD), &&L(OPBCADD),	&&L(OPBDADD),
+		&&L(OPCDADD), 
+		&&L(OPAiADDC), &&L(OPBiADDC), &&L(OPCiADDC), &&L(OPDiADDC),
+		&&L(OPAiSUBC), &&L(OPBiSUBC), &&L(OPCiSUBC), &&L(OPDiSUBC), 
+		&&L(OPAPOP), &&L(OPBPOP), &&L(OPCPOP), &&L(OPDPOP),
+		&&L(OPAPUSH), &&L(OPBPUSH),	&&L(OPCPUSH), &&L(OPDPUSH),
+		&&L(OPAiPUSHC),	&&L(OPBiPUSHC),	&&L(OPCiPUSHC),	&&L(OPDiPUSHC),
+		&&L(OPACOPY), &&L(OPBCOPY), &&L(OPCCOPY), &&L(OPDCOPY),
+		&&L(OPAiJLC), &&L(OPBiJLC), &&L(OPCiJLC), &&L(OPDiJLC),
+		&&L(OPAiJGC), &&L(OPBiJGC),	&&L(OPCiJGC), &&L(OPDiJGC),
+		&&L(OPAFASTCALL), &&L(OPBFASTCALL), &&L(OPCFASTCALL), &&L(OPDFASTCALL),
+		&&L(OPARET), &&L(OPBRET), &&L(OPCRET), &&L(OPDRET),
+		&&L(OPAMOV), &&L(OPBMOV), &&L(OPCMOV), &&L(OPDMOV),
+	};
+	VirtualMachineCode *pc = vmcode;
+	DISPATCH_START;
+	
+	CASE(OPMOV) {}
+	CASE(OPADD) {}
+	CASE(OPiADDC) {}
+	CASE(OPSUB) {}
+	CASE(OPiSUBC) {}
+	CASE(OPMUL) {}
+	CASE(OPDIV) {}
+	CASE(OPCMP) {}
+	CASE(OPJL) {}
+	CASE(OPiJLC) {}
+	CASE(OPJG) {}
+	CASE(OPiJGC) {}
+	CASE(OPLOAD) {}
+	CASE(OPSTORE) {}
+	CASE(OPCALL) {
+		DBG_P("OPCALL");
+		VirtualMachineCode *func_vmcode = (VirtualMachineCode *)fetch_from_virtual_memory(pc->name);
+		if (func_vmcode == NULL) {
+			fprintf(stderr, "[ERROR] ) undefined function name [%s]\n", pc->name);
+			return 0;
+		}
+		local_cache_func_vmcode = func_vmcode;
+		DBG_P("arg_stack_count = [%d]", arg_stack_count);
+		int res = VirtualMachine_fastRun(func_vmcode);
+		DBG_P("OPCALL: res = [%d]", res);
+		arg_stack_count--;
+		eax = res;
+		pc++;
+		goto NEXTOP;
+	}
+	CASE(OPJMP) {}
+	CASE(OPFASTCALL) {}
+	CASE(OPPUSH) {}
+	CASE(OPiPUSHC) {}
+	CASE(OPPOP) {}
+	CASE(OPCOPY) {}
+	CASE(OPTHCODE) {
+		DBG_P("OPTHCODE");
+		VirtualMachine_createDirectThreadingCode(vmcode, jmp_table);
+		return 0;
+	}
+	CASE(OPNOP) {}
+	CASE(OPRET) {}
 #include "finalinst.c"
 }
 
@@ -1240,6 +1297,7 @@ VirtualMachine *new_VirtualMachine(void)
 {
 	VirtualMachine *ret = (VirtualMachine *)gmalloc(sizeof(VirtualMachine));
 	ret->run = VirtualMachine_run;
+	ret->fastRun = VirtualMachine_fastRun;
 	ret->setVariable = VirtualMachine_setVariable;
 	ret->setFunction = VirtualMachine_setFunction;
 	ret->clear = VirtualMachine_clear;
