@@ -88,21 +88,24 @@ void glisp_start_shell(void)
 				thcode->op = OPTHCODE;
 				vmcode->add(vmcode, thcode);
 				vmcode->reverse(vmcode);
-				int vm_stack_top = vmcode->size - 1;
+				vmcode->dump(vmcode);
 				VirtualMachineCode *code = vmcode->getPureCode(vmcode);
 				vm->run(code);//direct threading compile time & not execute
+				int vm_stack_top = vmcode->size - 2;
+				code++;//Skip OPNOP
 				if (c->isExecFlag) {
 					int ret = vm->run(code);//execute
 					vm->setVariable(code, vm_stack_top, ret);
 					fprintf(stderr, "ans = [%d]\n", ret);
+					free(--code);
 				} else {
 					vm->setFunction(code, vm_stack_top);
 				}
-				vm->clear();
 				DBG_P("===================");
-				//fprintf(stderr, "ans = [%d]\n", ret);
-				//Conscell *ret = eval(root->cdr);
-				//displayResult(ret);
+				vm->clear();
+				vm->delete(vm);
+				vmcode->delete(vmcode);
+				c->delete(c);
 				t->delete(token);
 				p->delete(root);
 			}
@@ -122,6 +125,9 @@ void glisp_start_shell(void)
 			brace_count = 0;//brace_count is global variable
 		}
 	}
+	clear_virtual_memory();
+	free(t);
+	free(p);
 }
 
 void glisp_start_script(char *file_name)
@@ -164,12 +170,15 @@ void glisp_start_script(char *file_name)
 					int ret = vm->run(code);//execute
 					vm->setVariable(code, vm_stack_top, ret);
 					fprintf(stderr, "ans = [%d]\n", ret);
+					free(--code);
 				} else {
 					vm->setFunction(code, vm_stack_top);
 				}
-				vm->clear();
 				DBG_P("===================");
-				//Conscell *ret = eval(root->cdr);
+				vm->clear();
+				vm->delete(vm);
+				vmcode->delete(vmcode);
+				c->delete(c);
 				t->delete(token);
 				p->delete(root);
 			}
@@ -182,6 +191,9 @@ void glisp_start_script(char *file_name)
 		}
 	}
 	fclose(fp);
+	clear_virtual_memory();
 	deleteHashTable();
 	deleteFuncTable(p);
+	free(t);
+	free(p);
 }

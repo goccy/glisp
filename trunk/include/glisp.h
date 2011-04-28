@@ -54,6 +54,7 @@ typedef struct _Conscell {
 typedef struct _GMap {
 	const char *key;
 	void *value;
+	int type;
 } GMap;
 
 typedef struct _Tokenizer {
@@ -126,7 +127,6 @@ typedef struct VirtualMachineCodeAPI {
 
 typedef struct _VirtualMachineCodeArray {
 	VirtualMachineCode **a; /* original array */
-	//VirtualMachineCode a[MAX_STACK_SIZE]; /* original array */
 	size_t size; /* current vmcode size */
 	void (*add)(struct _VirtualMachineCodeArray *array, VirtualMachineCode *code);
 	struct _VirtualMachineCodeArray *(*copy)(struct _VirtualMachineCodeArray *, int base_offset);
@@ -134,6 +134,7 @@ typedef struct _VirtualMachineCodeArray {
 	void (*remove)(struct _VirtualMachineCodeArray *array, int num);
 	void (*reverse)(struct _VirtualMachineCodeArray *array);
 	VirtualMachineCode *(*getPureCode)(struct _VirtualMachineCodeArray *array);
+	void (*delete)(struct _VirtualMachineCodeArray *array);
 } VirtualMachineCodeArray;
 
 typedef struct _Compiler {
@@ -141,6 +142,7 @@ typedef struct _Compiler {
 	int isExecFlag;
 	VirtualMachineCodeArray *(*compile)(struct _Compiler *, Conscell *conscell);
 	void (*compileToFastCode)(VirtualMachineCodeArray *vmcode);
+	void (*delete)(struct _Compiler *c);
 } Compiler;
 
 typedef struct _VirtualMachine {
@@ -148,6 +150,7 @@ typedef struct _VirtualMachine {
 	void (*setVariable)(VirtualMachineCode *vmcode, int size, int var);
 	void (*setFunction)(VirtualMachineCode *vmcode, int size);
 	void (*clear)(void);
+	void (*delete)(struct _VirtualMachine *vm);
 } VirtualMachine;
 
 typedef enum {
@@ -183,7 +186,7 @@ Compiler *new_Compiler(void);
 VirtualMachineCode *new_VirtualMachineCode(Conscell *c, int base_count);
 VirtualMachineCodeArray *new_VirtualMachineCodeArray(void);
 VirtualMachine *new_VirtualMachine(void);
-
+void clear_virtual_memory(void);
 
 Conscell* eval(Conscell *root);
 

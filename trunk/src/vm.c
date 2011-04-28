@@ -3,12 +3,13 @@
 #define MAX_VIRTUAL_MEMORY_SIZE 32
 static GMap *virtual_memory[MAX_VIRTUAL_MEMORY_SIZE] = {NULL};
 static int virtual_memory_address = 0;
-GMap *new_GMap(const char *key, void *value)
+GMap *new_GMap(const char *key, void *value, CellType type)
 {
 	GMap *ret = (GMap *)gmalloc(sizeof(GMap));
 	ret->key = (const char *)gmalloc(strlen(key) + 1);
 	strncpy((char *)ret->key, key, strlen(key) + 1);
 	ret->value = value;
+	ret->type = type;
 	//fprintf(stderr, "key = [%s]\n", key);
 	//fprintf(stderr, "value = [%d]\n", (int)value);
 	return ret;
@@ -33,6 +34,21 @@ static void *fetch_from_virtual_memory(const char *key)
 	return NULL;
 }
 
+void clear_virtual_memory(void)
+{
+	size_t i = 0;
+	while (virtual_memory[i] != NULL) {
+		GMap *map = virtual_memory[i];
+		if (map->type == DEFUN) {
+			VirtualMachineCode *code = (VirtualMachineCode *)map->value;
+			free(--code);
+		}
+		//free((char *)map->key);
+		//free(map->value);
+		i++;
+	}
+}
+
 static int search_func_args_from_vmcode(VirtualMachineCode *c, const char *key)
 {
 	int ret = 0;
@@ -47,6 +63,8 @@ static int search_func_args_from_vmcode(VirtualMachineCode *c, const char *key)
 	}
 	return ret;
 }
+
+/*=============================<<<  VirtualMachineCode  Class >>> ================================*/
 
 static void VirtualMachineCode_dump(VirtualMachineCode *code)
 {
@@ -142,6 +160,7 @@ static void VirtualMachineCode_delete(VirtualMachineCode *c)
 		}
 		free(c->args);
 	}
+	free(c->api);
 	free(c);
 	c = NULL;
 }
@@ -292,6 +311,8 @@ VirtualMachineCode *new_VirtualMachineCode(Conscell *c, int base_count)
 	}
 	return ret;
 }
+
+/*=============================<<<  Compiler  Class >>> ================================*/
 
 static VirtualMachineCodeArray *Compiler_compile(Compiler *compiler, Conscell *path);
 static VirtualMachineCode *local_func_code = NULL;
@@ -584,6 +605,12 @@ static void Compiler_compileToFastCode(VirtualMachineCodeArray *vmcode)
 	}
 }
 
+static void Compiler_delete(Compiler *c)
+{
+	free(c);
+	c = NULL;
+}
+
 Compiler *new_Compiler(void)
 {
 	Compiler *ret = (Compiler *)malloc(sizeof(Compiler));
@@ -593,8 +620,11 @@ Compiler *new_Compiler(void)
 	ret->compileToFastCode = Compiler_compileToFastCode;
 	VirtualMachineCode *code = new_VirtualMachineCode(NULL, 0);//OPRET
 	ret->vmcodes->add(ret->vmcodes, code);
+	ret->delete = Compiler_delete;
 	return ret;
 }
+
+/*=============================<<<  VirtualMachine  Class >>> ================================*/
 
 inline void VirtualMachine_createDirectThreadingCode(VirtualMachineCode *vmcode, void **jmp_table)
 {
@@ -610,6 +640,7 @@ inline void VirtualMachine_createDirectThreadingCode(VirtualMachineCode *vmcode,
 #define DISPATCH_START goto *jmp_table[pc->op]
 #define NEXTOP *(pc->opnext)
 #define MAX_REG_SIZE 6
+//#define MAX_REG_SIZE 8 //Eight is faster than six at build server
 
 static int function_arg_stack[MAX_STACK_SIZE] = {0};
 static int arg_stack_count = 0;
@@ -619,6 +650,7 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 {
 	DBG_P("=============<<< run >>>===================");
 	//vmcode->dump(vmcode);
+	//int reg[max_reg_size];// = {0};
 	int reg[MAX_REG_SIZE] = {0};
 	static void *jmp_table[] = {
 		&&L(OPMOV), &&L(OPADD), &&L(OPSUB), &&L(OPMUL), &&L(OPDIV),
@@ -627,7 +659,6 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 		&&L(OPiADDC), &&L(OPiSUBC), &&L(OPiJLC), &&L(OPiJGC), &&L(OPFASTCALL),
 		&&L(OPiPUSHC), &&L(OPCOPY), &&L(OPTHCODE), &&L(OPNOP),
 	};
-	
 	VirtualMachineCode *pc = vmcode;
 	//push(&&L_return);
 	DISPATCH_START;
@@ -681,7 +712,7 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 	}
 	CASE(OPJL) {
 		DBG_P("OPJL");
-		if (reg[pc->dst] < reg[pc->src] && isExecFlag) {
+		if (reg[pc->dst] < reg[pc->src]) {
 			pc += 2;
 		} else {
 			pc += 3;
@@ -723,7 +754,7 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 			fprintf(stderr, "[ERROR] ) undefined variable\n");
 			return 0;
 		}
-		reg[pc->dst] = (int)value;
+		reg[pc->dst] = (intptr_t)value;
 		pc++;
 		goto NEXTOP;
 	}
@@ -821,7 +852,6 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 	CASE(OPRET) {
 		DBG_P("OPRET");
 		reg[0] = reg[pc->src];
-		pc++;
 		DBG_P("reg[0] = [%d]", reg[0]);
 		DBG_P("arg_stack_count = [%d]", arg_stack_count);
 		return reg[0];
@@ -844,7 +874,7 @@ static void VirtualMachine_setVariable(VirtualMachineCode *vmcode, int size, int
 		}
 		DBG_P("store->name = [%s]", store->name);
 		DBG_P("var = [%d]", var);
-		GMap *map = new_GMap(store->name, (void *)var);
+		GMap *map = new_GMap(store->name, (void *)var, SETQ);
 		store_to_virtual_memory(map);
 	}
 }
@@ -854,7 +884,6 @@ static void VirtualMachine_setFunction(VirtualMachineCode *vmcode, int size)
 	if (isSetFlag && isDEFUN) {
 		DBG_P("store vmcode to virtual memory");
 		VirtualMachineCode *store = NULL;
-		//int vm_stack_top = vmcode->size - 1;
 		if ((vmcode + size)->op == OPSTORE) {
 			store = vmcode + size;
 		} else if ((vmcode + size - 1)->op == OPSTORE) {
@@ -862,13 +891,8 @@ static void VirtualMachine_setFunction(VirtualMachineCode *vmcode, int size)
 		} else {
 			DBG_P("OPSTORE is cannnot find because isDEFUN flag is true");
 		}
-		//int base_code_num = 2; //for excluding OPSTORE code
-		//VirtualMachineCodeArray *vmcodes = vmcode->copy(vmcode, base_code_num);
-		//vmcodes->size--;
-		GMap *map = new_GMap(store->name, (void *)vmcode);
+		GMap *map = new_GMap(store->name, (void *)vmcode, DEFUN);
 		store_to_virtual_memory(map);
-		//vmcodes->dump(vmcode);
-		//DBG_P("vmcode->size = [%ld]", vmcodes->size)
 	}
 }
 
@@ -885,6 +909,12 @@ static void VirtualMachine_clear(void)
 	false_jump_register = 0;
 }
 
+static void VirtualMachine_delete(VirtualMachine *vm)
+{
+	free(vm);
+	vm = NULL;
+}
+
 VirtualMachine *new_VirtualMachine(void)
 {
 	VirtualMachine *ret = (VirtualMachine *)gmalloc(sizeof(VirtualMachine));
@@ -892,5 +922,6 @@ VirtualMachine *new_VirtualMachine(void)
 	ret->setVariable = VirtualMachine_setVariable;
 	ret->setFunction = VirtualMachine_setFunction;
 	ret->clear = VirtualMachine_clear;
+	ret->delete = VirtualMachine_delete;
 	return ret;
 }

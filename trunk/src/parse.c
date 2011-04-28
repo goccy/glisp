@@ -235,7 +235,7 @@ static void Parser_delete(Conscell *path)
 		free(path);
 		path = tmp;
 		Parser_delete(path);
-	} 
+	}
 }
 
 Parser *new_Parser(void)
