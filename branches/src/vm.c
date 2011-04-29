@@ -1057,7 +1057,7 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 			fprintf(stderr, "[ERROR] ) undefined variable\n");
 			return 0;
 		}
-		reg[pc->dst] = (int)value;
+		reg[pc->dst] = (intptr_t)value;
 		pc++;
 		goto NEXTOP;
 	}
@@ -1206,6 +1206,14 @@ static int VirtualMachine_fastRun(VirtualMachineCode *vmcode)
 	CASE(OPiJGC) {}
 	CASE(OPLOAD) {}
 	CASE(OPSTORE) {}
+	CASE(OPJMP) {}
+	CASE(OPFASTCALL) {}
+	CASE(OPPUSH) {}
+	CASE(OPiPUSHC) {}
+	CASE(OPPOP) {}
+	CASE(OPCOPY) {}
+	CASE(OPNOP) {}
+	CASE(OPRET) {}
 	CASE(OPCALL) {
 		DBG_P("OPCALL");
 		VirtualMachineCode *func_vmcode = (VirtualMachineCode *)fetch_from_virtual_memory(pc->name);
@@ -1222,19 +1230,11 @@ static int VirtualMachine_fastRun(VirtualMachineCode *vmcode)
 		pc++;
 		goto NEXTOP;
 	}
-	CASE(OPJMP) {}
-	CASE(OPFASTCALL) {}
-	CASE(OPPUSH) {}
-	CASE(OPiPUSHC) {}
-	CASE(OPPOP) {}
-	CASE(OPCOPY) {}
 	CASE(OPTHCODE) {
 		DBG_P("OPTHCODE");
 		VirtualMachine_createDirectThreadingCode(vmcode, jmp_table);
 		return 0;
 	}
-	CASE(OPNOP) {}
-	CASE(OPRET) {}
 #include "finalinst.c"
 }
 
@@ -1252,7 +1252,8 @@ static void VirtualMachine_setVariable(VirtualMachineCode *vmcode, int size, int
 		}
 		DBG_P("store->name = [%s]", store->name);
 		DBG_P("var = [%d]", var);
-		GMap *map = new_GMap(store->name, (void *)var, SETQ);
+		intptr_t v = var;
+		GMap *map = new_GMap(store->name, (void *)v, SETQ);
 		store_to_virtual_memory(map);
 	}
 }

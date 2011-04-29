@@ -12,12 +12,12 @@ static void glisp_init_table(void)
 
 static void glisp_init(void)
 {
-	using_history();
-	add_history("(defun fib(n) (if (< n 3) 1 (+ (fib(- n 2)) (fib(- n 1)))))");
+	usingHistory();
+	addHistory("(defun fib(n) (if (< n 3) 1 (+ (fib(- n 2)) (fib(- n 1)))))");
 	//add_history("(defun tarai(x y z)(if (<= x y) y ( (tarai( (tarai((- x 1) y z)) (tarai((- y 1) z x)) (tarai((- z 1) x y)))))))");
-	add_history("(fib 36)");
-	add_history("(setq x 4)");
-	add_history("(defun func(n) (+ n 2))");
+	addHistory("(fib 36)");
+	addHistory("(setq x 4)");
+	addHistory("(defun func(n) (+ n 2))");
 	glisp_init_table();
 	brace_count = 0;
 }
@@ -98,7 +98,7 @@ void glisp_start_shell(void)
 	Parser *p = new_Parser();
 	while (true) {
 		if (line == NULL) {
-			line = readline(">>>");
+			line = greadline(">>>");
 		}
 		if (!strncmp(line, "quit", sizeof("quit")) ||
 			!strncmp(line, "exit", sizeof("exit"))) {
@@ -106,7 +106,7 @@ void glisp_start_shell(void)
 			deleteFuncTable(p);
 			exit(0);
 		}
-		add_history(line);
+		addHistory(line);
 		int check = glisp_check_brace(line);
 		if (check == 0) {
 			strcat(tmp, " ");
@@ -119,7 +119,7 @@ void glisp_start_shell(void)
 			strcat(tmp, " ");
 			strcat(tmp, line);
 			free(line);
-			line = readline("...");
+			line = greadline("...");
 		} else {
 			fprintf(stderr, "Syntax error!!\n");
 			tmp[0] = EOL;

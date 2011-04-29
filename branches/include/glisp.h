@@ -1,9 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <ctype.h>
-#include <readline/readline.h>
-#include <readline/history.h>
+#include <greadline.h>
 #define true 1
 #define false 0
 #define EOL '\0'
