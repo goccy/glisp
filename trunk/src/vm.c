@@ -945,17 +945,21 @@ inline void VirtualMachine_createDirectThreadingCode(VirtualMachineCode *vmcode,
 #define DISPATCH_START goto *jmp_table[pc->op]
 #define NEXTOP *(pc->opnext)
 #define MAX_REG_SIZE 32
+typedef struct recursive_stack {
+	int reg_stack[MAX_REG_SIZE];
+	int function_arg_stack;
+	void *ret_label_stack;
+	VirtualMachineCode *pc_stack;
+} RecursiveStack;
 
 static int VirtualMachine_run(VirtualMachineCode *vmcode)
 {
 	DBG_P("=============<<< run >>>===================");
 	//vmcode->dump(vmcode);
-	int reg_stack[MAX_STACK_SIZE][MAX_REG_SIZE];
-	void *ret_label_stack[MAX_STACK_SIZE] = {NULL};
-	VirtualMachineCode *pc_stack[MAX_STACK_SIZE] = {NULL};
-	int function_arg_stack[MAX_STACK_SIZE] = {0};
-	int stack_count = 0;
-	
+	RecursiveStack _r[MAX_STACK_SIZE];
+	RecursiveStack *r = _r;
+	VirtualMachineCode *pc = vmcode;
+
 	int reg[MAX_REG_SIZE] = {0};
 	VirtualMachineCode *local_cache_func_vmcode = NULL;
 	int cur_arg = -1; //this value is flag that copys pop num to all function argument
@@ -981,8 +985,7 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 		&&L(OPAMOV), &&L(OPBMOV), &&L(OPCMOV), &&L(OPDMOV),
 	};
 
-	VirtualMachineCode *pc = vmcode;
-	ret_label_stack[0] = &&L_RETURN;
+	r->ret_label_stack = &&L_RETURN;
 	DISPATCH_START;
 	
 	CASE(OPMOV) {
@@ -1091,18 +1094,19 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 			return 0;
 		}
 		local_cache_func_vmcode = func_vmcode;
-		ret_label_stack[stack_count] = &&L_CALLAFTER;
-		pc_stack[stack_count] = pc;
-		memcpy(reg_stack[stack_count], reg, MAX_REG_SIZE);
+		r->ret_label_stack = &&L_CALLAFTER;
+		r->pc_stack = pc;
+		memcpy(r->reg_stack, reg, MAX_REG_SIZE);
 		pc = local_cache_func_vmcode;
 		goto NEXTOP;
 	L_CALLAFTER:
 		DBG_P("L_CALLAFTER");
 		DBG_P("stack_count = [%d]", stack_count);
-		pc = pc_stack[stack_count];
+		pc = r->pc_stack;
 		int res = reg[0];
-		memcpy(reg, reg_stack[stack_count], MAX_REG_SIZE);
-		stack_count--;
+		memcpy(reg, r->reg_stack, MAX_REG_SIZE);
+		//stack_count--;
+		r--;
 		DBG_P("reg[0] = [%d]", res);
 		DBG_P("reg[0] = [%d]", reg[0]);
 		reg[pc->dst] = res;
@@ -1116,19 +1120,20 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 	}
 	CASE(OPFASTCALL) {
 		DBG_P("OPFASTCALL");
-		ret_label_stack[stack_count] = &&L_FASTCALLAFTER;
-		pc_stack[stack_count] = pc;
-		memcpy(reg_stack[stack_count], reg, MAX_REG_SIZE);
+		r->ret_label_stack = &&L_FASTCALLAFTER;
+		r->pc_stack = pc;
+		memcpy(r->reg_stack, reg, MAX_REG_SIZE);
 		pc = local_cache_func_vmcode;
 		goto NEXTOP;
 	L_FASTCALLAFTER:
 		DBG_P("L_FASTCALLAFTER");
 		DBG_P("stack_count = [%d]", stack_count);
-		pc = pc_stack[stack_count];
+		pc = r->pc_stack;
 		int res = reg[0];
 		DBG_P("res = [%d]", res);
-		memcpy(reg, reg_stack[stack_count], MAX_REG_SIZE);
-		stack_count--;
+		memcpy(reg, r->reg_stack, MAX_REG_SIZE);
+		//stack_count--;
+		r--;
 		DBG_P("L_FASTCALLAFTER: reg[0] = [%d]", res);
 		reg[pc->dst] = res;
 		pc++;
@@ -1136,23 +1141,25 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 	}
 	CASE(OPPUSH) {
 		DBG_P("OPPUSH");
-		stack_count++;
-		function_arg_stack[stack_count] = reg[pc->dst];
-		DBG_P("function_arg_stack[stack_count] = [%d]", function_arg_stack[stack_count]);
+		//stack_count++;
+		r++;
+		r->function_arg_stack = reg[pc->dst];
+		//DBG_P("function_arg_stack[stack_count] = [%d]", function_arg_stack[stack_count]);
 		pc++;
 		goto NEXTOP;
 	}
 	CASE(OPiPUSHC) {
 		DBG_P("OPiPUSH");
-		stack_count++;
-		function_arg_stack[stack_count] = pc->src;
+		//stack_count++;
+		r++;
+		r->function_arg_stack = pc->src;
 		pc++;
 		goto NEXTOP;
 	}
 	CASE(OPPOP) {
 		DBG_P("OPPOP");
 		DBG_P("function_arg_stack[arg_stack_count] = [%d]", function_arg_stack[stack_count]);
-		cur_arg = function_arg_stack[stack_count];
+		cur_arg = r->function_arg_stack;
 		reg[pc->dst] = cur_arg;
 		DBG_P("reg[%d] = [%d]", pc->dst, cur_arg);
 		pc++;
@@ -1180,7 +1187,7 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 		reg[0] = reg[pc->src];
 		DBG_P("reg[0] = [%d]", reg[0]);
 		DBG_P("stack_count = [%d]", stack_count);
-		goto *ret_label_stack[stack_count];
+		goto *r->ret_label_stack;
 		//return reg[0];
 	}
 #include "finalinst.c"

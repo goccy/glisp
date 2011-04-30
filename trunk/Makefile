@@ -1,6 +1,6 @@
 CC = gcc -m64
 READLINE_DIR = lib/greadline
-CFLAGS = -O2 -Wall -W -fomit-frame-pointer -I./include/ -I$(READLINE_DIR)/include/
+CFLAGS = -O2 -Wall -W -fasm-blocks -fomit-frame-pointer -I./include/ -I$(READLINE_DIR)/include/
 #CFLAGS = -O0 -g3 -DDEBUG_MODE -Wall -W -I./include/ -I$(READLINE_DIR)/include
 READLINE_CFLAGS= -Os -Wall -W -I$(READLINE_DIR)/include/
 LDLIBS = 
