@@ -1,11 +1,14 @@
-CC = gcc
-CFLAGS = -O2 -g0 -Wall -W  -I./include/ -I/opt/local/include/ # -pipe -fomit-frame-pointer -funroll-loops -fprefetch-loop-arrays -falign-functions=4 -fforce-addr -floop-optimize -fschedule-insns
-#CFLAGS = -O0 -g3 -Wall -W -DDEBUG_MODE  -I./include/ -I/opt/local/include/  #-pipe -fomit-frame-pointer -funroll-loops -fprefetch-loop-arrays -falign-functions=4 -fforce-addr -floop-optimize -fschedule-insns
-LDLIBS = -L/opt/local/lib/ -lreadline
-
+CC = gcc -m64
+READLINE_DIR = lib/greadline
+CFLAGS = -O2 -Wall -W -fomit-frame-pointer -I./include/ -I$(READLINE_DIR)/include/
+#CFLAGS = -O0 -g3 -DDEBUG_MODE -Wall -W -I./include/ -I$(READLINE_DIR)/include
+READLINE_CFLAGS= -Os -Wall -W -I$(READLINE_DIR)/include/
+LDLIBS = 
 target = glisp
 
-objs = build/main.o build/glisp.o build/token.o build/parse.o build/eval.o build/hash.o build/func.o build/mem.o build/vm.o build/array.o
+objs = build/main.o build/glisp.o build/token.o build/parse.o build/eval.o build/hash.o build/func.o build/mem.o build/vm.o build/array.o\
+	$(READLINE_DIR)/build/greadline.o $(READLINE_DIR)/build/greadline.o $(READLINE_DIR)/build/keyword.o $(READLINE_DIR)/build/term.o $(READLINE_DIR)/build/complete.o\
+	$(READLINE_DIR)/build/history.o
 
 .PHONY: all
 all: $(target)
@@ -42,6 +45,21 @@ build/vm.o : src/vm.c
 
 build/array.o : src/array.c
 	$(CC) $(CFLAGS) -o $@ -c $^
+
+$(READLINE_DIR)/build/greadline.o : $(READLINE_DIR)/src/greadline.c
+	$(CC) $(READLINE_CFLAGS) -o $@ -c $^
+
+$(READLINE_DIR)/build/complete.o : $(READLINE_DIR)/src/complete.c
+	$(CC) $(READLINE_CFLAGS) -o $@ -c $^
+
+$(READLINE_DIR)/build/keyword.o : $(READLINE_DIR)/src/keyword.c
+	$(CC) $(READLINE_CFLAGS) -o $@ -c $^
+
+$(READLINE_DIR)/build/term.o : $(READLINE_DIR)/src/term.c
+	$(CC) $(READLINE_CFLAGS) -o $@ -c $^
+
+$(READLINE_DIR)/build/history.o : $(READLINE_DIR)/src/history.c
+	$(CC) $(READLINE_CFLAGS) -o $@ -c $^
 
 .PHONY: clean
 clean:

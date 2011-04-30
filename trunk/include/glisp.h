@@ -1,9 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <ctype.h>
-#include <readline/readline.h>
-#include <readline/history.h>
+#include <greadline.h>
 #define true 1
 #define false 0
 #define EOL '\0'
@@ -106,6 +106,57 @@ typedef enum {
 	OPCOPY,
 	OPTHCODE,
 	OPNOP,
+	/* FINAL FAST CALL INST */
+	OPABADD,
+	OPACADD,
+	OPADADD,
+	OPBCADD,
+	OPBDADD,
+	OPCDADD,
+	OPAiADDC,
+	OPBiADDC,
+	OPCiADDC,
+	OPDiADDC,
+	OPAiSUBC,
+	OPBiSUBC,
+	OPCiSUBC,
+	OPDiSUBC,
+	OPAPOP,
+	OPBPOP,
+	OPCPOP,
+	OPDPOP,
+	OPAPUSH,
+	OPBPUSH,
+	OPCPUSH,
+	OPDPUSH,
+	OPAiPUSHC,
+	OPBiPUSHC,
+	OPCiPUSHC,
+	OPDiPUSHC,
+	OPACOPY,
+	OPBCOPY,
+	OPCCOPY,
+	OPDCOPY,
+	OPAiJLC,
+	OPBiJLC,
+	OPCiJLC,
+	OPDiJLC,
+	OPAiJGC,
+	OPBiJGC,
+	OPCiJGC,
+	OPDiJGC,
+	OPAFASTCALL,
+	OPBFASTCALL,
+	OPCFASTCALL,
+	OPDFASTCALL,
+	OPARET,
+	OPBRET,
+	OPCRET,
+	OPDRET,
+	OPAMOV,
+	OPBMOV,
+	OPCMOV,
+	OPDMOV,
 } OpCode;
 
 struct VirtualMachineCodeAPI;
@@ -142,6 +193,9 @@ typedef struct _Compiler {
 	int isExecFlag;
 	VirtualMachineCodeArray *(*compile)(struct _Compiler *, Conscell *conscell);
 	void (*compileToFastCode)(VirtualMachineCodeArray *vmcode);
+	void (*fixRegNumber)(VirtualMachineCodeArray *vmcode);
+	int (*getMaxRegNumber)(VirtualMachineCodeArray *vmcode);
+	void (*finalCompile)(VirtualMachineCodeArray *vmcode);
 	void (*delete)(struct _Compiler *c);
 } Compiler;
 

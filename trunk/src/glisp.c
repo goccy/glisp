@@ -12,33 +12,16 @@ static void glisp_init_table(void)
 
 static void glisp_init(void)
 {
-	using_history();
-	add_history("(defun fib(n) (if (< n 3) 1 (+ (fib(- n 2)) (fib(- n 1)))))");
+	usingHistory();
+	addHistory("(defun fib(n) (if (< n 3) 1 (+ (fib(- n 2)) (fib(- n 1)))))");
 	//add_history("(defun tarai(x y z)(if (<= x y) y ( (tarai( (tarai((- x 1) y z)) (tarai((- y 1) z x)) (tarai((- z 1) x y)))))))");
-	add_history("(fib 36)");
-	add_history("(setq x 4)");
-	add_history("(defun func(n) (+ n 2))");
+	addHistory("(fib 36)");
+	addHistory("(setq x 4)");
+	addHistory("(defun func(n) (+ n 2))");
 	glisp_init_table();
 	brace_count = 0;
 }
 
-/*
-static void glisp_display_result(Conscell *ans)
-{
-	if (ans != NULL) {
-		if (ans->type == BOOL || ans->type == STR_BOOL) {
-			if (ans->result == 1) {
-				printf("true\n");
-			} else {
-				printf("false\n");
-			}
-		} else if (ans->type != SETQ &&
-				   ans->type != FUNC) {
-			printf("%d\n", ans->result);
-		} 
-	}
-}
-*/
 static int glisp_check_brace(char *line)
 {
 	//brace_count is global variable
@@ -54,6 +37,48 @@ static int glisp_check_brace(char *line)
 	return brace_count;
 }
 
+static void glisp_main(Tokenizer *t, Parser *p, char *line)
+{
+	char **token = t->split(line);
+	if (token != NULL && token[0] != NULL && !strncmp(token[0], "(", sizeof("("))) {
+		Conscell *root = p->parse(token);
+		Compiler *c = new_Compiler();
+		VirtualMachineCodeArray *vmcode = c->compile(c, root->cdr);
+		//vmcode->dump(vmcode);
+		VirtualMachine *vm = new_VirtualMachine();
+		c->compileToFastCode(vmcode);
+		VirtualMachineCode *thcode = new_VirtualMachineCode(NULL, 0);
+		thcode->op = OPTHCODE;
+		vmcode->add(vmcode, thcode);
+		c->fixRegNumber(vmcode);
+		if (c->getMaxRegNumber(vmcode) < 4) {
+			c->finalCompile(vmcode);
+		}
+		vmcode->reverse(vmcode);
+		vmcode->dump(vmcode);
+		VirtualMachineCode *code = vmcode->getPureCode(vmcode);
+		vm->run(code);//direct threading compile time & not execute
+		int vm_stack_top = vmcode->size - 2;
+		code++;//Skip OPNOP
+		if (c->isExecFlag) {
+			int ret = 0;
+			ret = vm->run(code);//execute
+			vm->setVariable(code, vm_stack_top, ret);
+			fprintf(stderr, "%d\n", ret);
+			free(--code);
+		} else {
+			vm->setFunction(code, vm_stack_top);
+		}
+		DBG_P("===================");
+		vm->clear();
+		vm->delete(vm);
+		vmcode->delete(vmcode);
+		c->delete(c);
+		t->delete(token);
+		p->delete(root);
+	}
+}
+
 void glisp_start_shell(void)
 {
 	char *line = NULL;
@@ -63,7 +88,7 @@ void glisp_start_shell(void)
 	Parser *p = new_Parser();
 	while (true) {
 		if (line == NULL) {
-			line = readline(">>>");
+			line = greadline(">>>");
 		}
 		if (!strncmp(line, "quit", sizeof("quit")) ||
 			!strncmp(line, "exit", sizeof("exit"))) {
@@ -71,44 +96,12 @@ void glisp_start_shell(void)
 			deleteFuncTable(p);
 			exit(0);
 		}
-		add_history(line);
+		addHistory(line);
 		int check = glisp_check_brace(line);
 		if (check == 0) {
 			strcat(tmp, " ");
 			strcat(tmp, line);
-			char **token = t->split(tmp);
-			if (token != NULL && token[0] != NULL && !strncmp(token[0], "(", sizeof("("))) {
-				Conscell *root = p->parse(token);
-				Compiler *c = new_Compiler();
-				VirtualMachineCodeArray *vmcode = c->compile(c, root->cdr);
-				//vmcode->dump(vmcode);
-				VirtualMachine *vm = new_VirtualMachine();
-				c->compileToFastCode(vmcode);
-				VirtualMachineCode *thcode = new_VirtualMachineCode(NULL, 0);
-				thcode->op = OPTHCODE;
-				vmcode->add(vmcode, thcode);
-				vmcode->reverse(vmcode);
-				vmcode->dump(vmcode);
-				VirtualMachineCode *code = vmcode->getPureCode(vmcode);
-				vm->run(code);//direct threading compile time & not execute
-				int vm_stack_top = vmcode->size - 2;
-				code++;//Skip OPNOP
-				if (c->isExecFlag) {
-					int ret = vm->run(code);//execute
-					vm->setVariable(code, vm_stack_top, ret);
-					fprintf(stderr, "ans = [%d]\n", ret);
-					free(--code);
-				} else {
-					vm->setFunction(code, vm_stack_top);
-				}
-				DBG_P("===================");
-				vm->clear();
-				vm->delete(vm);
-				vmcode->delete(vmcode);
-				c->delete(c);
-				t->delete(token);
-				p->delete(root);
-			}
+			glisp_main(t, p, line);
 			tmp[0] = EOL;
 			free(line);
 			line = NULL;
@@ -116,7 +109,7 @@ void glisp_start_shell(void)
 			strcat(tmp, " ");
 			strcat(tmp, line);
 			free(line);
-			line = readline("...");
+			line = greadline("...");
 		} else {
 			fprintf(stderr, "Syntax error!!\n");
 			tmp[0] = EOL;
@@ -134,8 +127,7 @@ void glisp_start_script(char *file_name)
 {
 	char line[128] = {0};
 	char tmp[128] = {0};
-	FILE *fp = NULL;
-	fp = fopen(file_name, "r");
+	FILE *fp = fopen(file_name, "r");
 	if (fp == NULL) {
 		fprintf(stderr, "file open error!!\n");
 		fclose(fp);
@@ -150,38 +142,7 @@ void glisp_start_script(char *file_name)
 		if (check == 0) {
 			strcat(tmp, line);
 			printf("src = %s\n", tmp);
-			char **token = t->split(tmp);
-			if (token != NULL && token[0] != NULL && !strncmp(token[0], "(", sizeof("("))) {
-				Conscell *root = p->parse(token);
-				Compiler *c = new_Compiler();
-				VirtualMachineCodeArray *vmcode = c->compile(c, root->cdr);
-				VirtualMachine *vm = new_VirtualMachine();
-				c->compileToFastCode(vmcode);
-				VirtualMachineCode *thcode = new_VirtualMachineCode(NULL, 0);
-				thcode->op = OPTHCODE;
-				vmcode->add(vmcode, thcode);
-				vmcode->reverse(vmcode);
-				vmcode->dump(vmcode);
-				VirtualMachineCode *code = vmcode->getPureCode(vmcode);
-				vm->run(code);//direct threading compile time & not execute
-				int vm_stack_top = vmcode->size - 2;
-				code++;//Skip OPNOP
-				if (c->isExecFlag) {
-					int ret = vm->run(code);//execute
-					vm->setVariable(code, vm_stack_top, ret);
-					fprintf(stderr, "ans = [%d]\n", ret);
-					free(--code);
-				} else {
-					vm->setFunction(code, vm_stack_top);
-				}
-				DBG_P("===================");
-				vm->clear();
-				vm->delete(vm);
-				vmcode->delete(vmcode);
-				c->delete(c);
-				t->delete(token);
-				p->delete(root);
-			}
+			glisp_main(t, p, tmp);
 			tmp[0] = EOL;
 		} else if (check > 0) {
 			strcat(tmp, line);
