@@ -15,13 +15,19 @@ CASE(OPADADD) {
 }
 CASE(OPBCADD) {
 	DBG_P("OPBCADD : ");
-	//reg[1] += reg[2];
+	reg[1] += reg[2];
+	/*
 	__asm {
 		mov eax, reg[1];
 		mov ebx, reg[2];
 		add eax, ebx;
 		mov reg[1], eax;
 	}
+	*/
+	//asm volatile ("mov reg[1], %eax");
+	//asm volatile ("mov reg[2], %ebx");
+	//asm volatile ("addl %eax, %ebx");
+	//asm volatile ("mov %eax, reg[1]");
 	pc++; goto NEXTOP;
 }
 CASE(OPBDADD) {
@@ -76,84 +82,72 @@ CASE(OPDiSUBC) {
 }
 CASE(OPAPOP) {
 	DBG_P("OPAPOP : ");
-	DBG_P("function_arg_stack[stack_count] = [%d]", function_arg_stack[stack_count]);
 	cur_arg = r->function_arg_stack;
 	reg[0] = cur_arg;
 	pc++; goto NEXTOP;
 }
 CASE(OPBPOP) {
 	DBG_P("OPBPOP : ");
-	DBG_P("function_arg_stack[stack_count] = [%d]", function_arg_stack[stack_count]);
 	cur_arg = r->function_arg_stack;
 	reg[1] = cur_arg;
 	pc++; goto NEXTOP;
 }
 CASE(OPCPOP) {
 	DBG_P("OPCPOP : ");
-	DBG_P("function_arg_stack[stack_count] = [%d]", function_arg_stack[stack_count]);
 	cur_arg = r->function_arg_stack;
 	reg[2] = cur_arg;
 	pc++; goto NEXTOP;
 }
 CASE(OPDPOP) {
 	DBG_P("OPDPOP : ");
-	DBG_P("function_arg_stack[stack_count] = [%d]", function_arg_stack[stack_count]);
 	cur_arg = r->function_arg_stack;
 	reg[3] = cur_arg;
 	pc++; goto NEXTOP;
 }
 CASE(OPAPUSH) {
 	DBG_P("OPAPUSH : ");
-	//stack_count++;
 	r++;
 	r->function_arg_stack = reg[0];
 	pc++; goto NEXTOP;
 }
 CASE(OPBPUSH) {
 	DBG_P("OPBPUSH : ");
-	//stack_count++;
 	r++;
 	r->function_arg_stack = reg[1];
 	pc++; goto NEXTOP;
 }
 CASE(OPCPUSH) {
 	DBG_P("OPCPUSH : ");
-	//stack_count++;
 	r++;
 	r->function_arg_stack = reg[2];
 	pc++; goto NEXTOP;
 }
 CASE(OPDPUSH) {
 	DBG_P("OPDPUSH : ");
-	//stack_count++;
 	r++;
 	r->function_arg_stack = reg[3];
 	pc++; goto NEXTOP;
 }
 CASE(OPAiPUSHC) {
 	DBG_P("OPAiPUSHC : ");
-	//stack_count++;
 	r++;
 	r->function_arg_stack = pc->src;
 	pc++; goto NEXTOP;
 }
 CASE(OPBiPUSHC) {
 	DBG_P("OPBiPUSHC : ");
-	//stack_count++;
 	r++;
 	r->function_arg_stack = pc->src;
 	pc++; goto NEXTOP;
 }
 CASE(OPCiPUSHC) {
 	DBG_P("OPCiPUSHC : ");
-	//stack_count++;
 	r++;
 	r->function_arg_stack = pc->src;
 	pc++; goto NEXTOP;
 }
 CASE(OPDiPUSHC) {
 	DBG_P("OPDiPUSHC : ");
-	//stack_count++;
 	r++;
 	r->function_arg_stack = pc->src;
 	pc++; goto NEXTOP;
@@ -259,13 +253,9 @@ CASE(OPAFASTCALL) {
 	goto NEXTOP;
 L_AFASTCALLAFTER:
 	DBG_P("L_AFASTCALLAFTER");
-	DBG_P("stack_count = [%d]", stack_count);
 	pc = r->pc_stack;
 	memcpy(reg, r->reg_stack, 4 * 4);
-	//stack_count--;
 	r--;
-	DBG_P("L_AFASTCALLAFTER: res = [%d]", res);
-	//reg[0] = res;
 	pc++;
 	goto NEXTOP;
 }
@@ -278,15 +268,11 @@ CASE(OPBFASTCALL) {
 	goto NEXTOP;
 L_BFASTCALLAFTER:
 	DBG_P("L_BFASTCALLAFTER");
-	DBG_P("stack_count = [%d]", stack_count);
 	pc = r->pc_stack;
 	int res = reg[0];
 	memcpy(reg, r->reg_stack, 16);
-	//stack_count--;
 	r--;
-	DBG_P("L_BFASTCALLAFTER: res = [%d]", res);
 	reg[1] = res;
-	//reg[0] = reg[1];
 	pc++;
 	goto NEXTOP;
 }
@@ -299,13 +285,10 @@ CASE(OPCFASTCALL) {
 	goto NEXTOP;
 L_CFASTCALLAFTER:
 	DBG_P("L_CFASTCALLAFTER");
-	DBG_P("stack_count = [%d]", stack_count);
 	pc = r->pc_stack;
 	int res = reg[0];
 	memcpy(reg, r->reg_stack, 16);
-	//stack_count--;
 	r--;
-	DBG_P("L_CFASTCALLAFTER: res = [%d]", res);
 	reg[2] = res;
 	pc++;
 	goto NEXTOP;
@@ -319,43 +302,118 @@ CASE(OPDFASTCALL) {
 	goto NEXTOP;
 L_DFASTCALLAFTER:
 	DBG_P("L_DFASTCALLAFTER");
-	DBG_P("stack_count = [%d]", stack_count);
 	pc = r->pc_stack;
 	int res = reg[0];
 	memcpy(reg, r->reg_stack, 16);
-	//stack_count--;
 	r--;
-	DBG_P("L_DFASTCALLAFTER: res = [%d]", res);
+	reg[3] = res;
+	pc++;
+	goto NEXTOP;
+}
+CASE(OPAPFASTCALL) {
+	DBG_P("OPAPFASTCALL : ");
+	//=========APUSH=========//
+	r++;
+	r->function_arg_stack = reg[0];
+	//=======================//
+	r->ret_label_stack = &&L_APFASTCALLAFTER;
+	r->pc_stack = pc;
+	memcpy(r->reg_stack, reg, 4 * 4);
+	pc = local_cache_func_vmcode;
+	goto NEXTOP;
+L_APFASTCALLAFTER:
+	DBG_P("L_APFASTCALLAFTER");
+	pc = r->pc_stack;
+	memcpy(reg, r->reg_stack, 4 * 4);
+	r--;
+	pc++;
+	goto NEXTOP;
+}
+CASE(OPBPFASTCALL) {
+	DBG_P("OPBPFASTCALL : ");
+	//=========BPUSH=========//
+	r++;
+	r->function_arg_stack = reg[1];
+	//=======================//
+	DBG_P("arg = [%d]", reg[1]);
+	r->ret_label_stack = &&L_BPFASTCALLAFTER;
+	r->pc_stack = pc;
+	memcpy(r->reg_stack, reg, 16);
+	pc = local_cache_func_vmcode;
+	goto NEXTOP;
+L_BPFASTCALLAFTER:
+	DBG_P("L_BPFASTCALLAFTER");
+	pc = r->pc_stack;
+	int res = reg[0];
+	DBG_P("res = [%d]", res);
+	memcpy(reg, r->reg_stack, 16);
+	r--;
+	reg[1] = res;
+	pc++;
+	goto NEXTOP;
+}
+CASE(OPCPFASTCALL) {
+	DBG_P("OPCPFASTCALL : ");
+	//=========CPUSH=========//
+	r++;
+	r->function_arg_stack = reg[2];
+	//=======================//
+	DBG_P("arg = [%d]", reg[2]);
+	r->ret_label_stack = &&L_CPFASTCALLAFTER;
+	r->pc_stack = pc;
+	memcpy(r->reg_stack, reg, 16);
+	pc = local_cache_func_vmcode;
+	goto NEXTOP;
+L_CPFASTCALLAFTER:
+	//asm("int3");
+	DBG_P("L_CPFASTCALLAFTER");
+	pc = r->pc_stack;
+	int res = reg[0];
+	DBG_P("res = [%d]", res);
+	memcpy(reg, r->reg_stack, 16);
+	r--;
+	reg[2] = res;
+	pc++;
+	goto NEXTOP;
+}
+CASE(OPDPFASTCALL) {
+	DBG_P("OPDPFASTCALL : ");
+	//=========DPUSH=========//
+	r++;
+	r->function_arg_stack = reg[3];
+	//=======================//
+	r->ret_label_stack = &&L_DPFASTCALLAFTER;
+	r->pc_stack = pc;
+	memcpy(r->reg_stack, reg, 16);
+	pc = local_cache_func_vmcode;
+	goto NEXTOP;
+L_DPFASTCALLAFTER:
+	DBG_P("L_DPFASTCALLAFTER");
+	pc = r->pc_stack;
+	int res = reg[0];
+	memcpy(reg, r->reg_stack, 16);
+	r--;
 	reg[3] = res;
 	pc++;
 	goto NEXTOP;
 }
 CASE(OPARET) {
 	DBG_P("OPARET : ");
-	//reg[0] = reg[0];
-	DBG_P("stack_count = [%d]", stack_count);
-	DBG_P("reg[0] = [%d]", reg[0]);
 	goto *r->ret_label_stack;
 }
 CASE(OPBRET) {
 	DBG_P("OPBRET : ");
 	reg[0] = reg[1];
-	DBG_P("stack_count = [%d]", stack_count);
-	DBG_P("reg[0] = [%d]", reg[0]);
 	goto *r->ret_label_stack;
 }
 CASE(OPCRET) {
 	DBG_P("OPCRET : ");
 	reg[0] = reg[2];
-	DBG_P("stack_count = [%d]", stack_count);
-	DBG_P("reg[0] = [%d]", reg[0]);
 	goto *r->ret_label_stack;
 }
 CASE(OPDRET) {
 	DBG_P("OPDRET : ");
 	reg[0] = reg[3];
-	DBG_P("stack_count = [%d]", stack_count);
-	DBG_P("reg[0] = [%d]", reg[0]);
 	goto *r->ret_label_stack;
 }
 CASE(OPAMOV) {

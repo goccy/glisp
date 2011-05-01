@@ -122,6 +122,12 @@ static void VirtualMachineCode_dump(VirtualMachineCode *code)
 	case OPFASTCALL:
 		DBG_PL("OPFASTCALL : ");
 		break;
+	case OPPFASTCALL:
+		DBG_PL("OPPFASTCALL : ");
+		break;
+	case OPiPFASTCALL:
+		DBG_PL("OPiPFASTCALL : ");
+		break;
 	case OPiJLC:
 		DBG_PL("OPiJLC : ");
 		break;
@@ -268,6 +274,18 @@ static void VirtualMachineCode_dump(VirtualMachineCode *code)
 		break;
 	case OPDFASTCALL:
 		DBG_PL("OPDFASTCALL : ");
+		break;
+	case OPAPFASTCALL:
+		DBG_PL("OPAPFASTCALL : ");
+		break;
+	case OPBPFASTCALL:
+		DBG_PL("OPBPFASTCALL : ");
+		break;
+	case OPCPFASTCALL:
+		DBG_PL("OPCPFASTCALL : ");
+		break;
+	case OPDPFASTCALL:
+		DBG_PL("OPDPFASTCALL : ");
 		break;
 	case OPARET:
 		DBG_PL("OPARET : ");
@@ -564,13 +582,11 @@ static int Compiler_opCompile(Compiler *c, Conscell *path, int isRecursive)
 
 static VirtualMachineCodeArray *Compiler_compile(Compiler *compiler, Conscell *path)
 {
-	//asm("int3");
-	//fprintf(stderr, "---init---\n");
 	Conscell *tmp = NULL;
 	while (path->car != NULL && path->type != FUNC) {
 		path = path->car;
 		if (path->cdr == NULL) break;
-		DBG_P("opcode = ");
+		//DBG_P("opcode = ");
 		path->printTypeName(path);
 		if (path->type == IF) {
 			tmp = path->cdr;
@@ -596,14 +612,14 @@ static VirtualMachineCodeArray *Compiler_compile(Compiler *compiler, Conscell *p
 					Compiler_compile(compiler, tmp);//recursive call
 				}
 			}
-			DBG_P("=== create calculate operation code ===");
+			//DBG_P("=== create calculate operation code ===");
 			Compiler_opCompile(compiler, path, 0);
-			DBG_P("=======================================");
+			//DBG_P("=======================================");
 			path = path->cdr;
 		} else {
-			DBG_P("=== create calculate operation code ===");
+			//DBG_P("=== create calculate operation code ===");
 			Compiler_opCompile(compiler, path, 0);
-			DBG_P("=======================================");
+			//DBG_P("=======================================");
 			tmp = path;
 			while (tmp->cdr != NULL) {
 				if (tmp->type == SETQ || tmp->type == DEFUN) tmp = tmp->cdr;//skip string cell
@@ -613,14 +629,12 @@ static VirtualMachineCodeArray *Compiler_compile(Compiler *compiler, Conscell *p
 					VirtualMachineCode *c = new_VirtualMachineCode(tmp, 0);
 					c->api->dump(c);
 					compiler->vmcodes->add(compiler->vmcodes, c);
-					//compiler->vmcodes->dump(compiler->vmcodes);
 				} else {
 					Compiler_compile(compiler, tmp);//recursive call
 				}
 			}
 		}
 	}
-	//fprintf(stderr, "---end---\n");
 	return compiler->vmcodes;
 }
 
@@ -655,7 +669,26 @@ static void Compiler_compileToFastCode(VirtualMachineCodeArray *vmcode)
 			if (set_name != NULL && gmatch(pc[i]->name, set_name)) {
 				//recursive call == translate ==> OPFASTCALL
 				DBG_P("RECURSIVE FUNC");
-				pc[i]->op = OPFASTCALL;
+				if (pc[i + 1]->op == OPPUSH) {
+					//non void function
+					pc[i]->op = OPPFASTCALL;
+					if (jl_register != -1) {
+						pc[jl_register]->jmp--;
+						jl_register--;
+					}
+					vmcode->remove(vmcode, i + 1);
+				} else if (pc[i + 1]->op == OPiPUSHC) {
+					//non void function
+					pc[i]->op = OPiPFASTCALL;
+					if (jl_register != -1) {
+						pc[jl_register]->jmp--;
+						jl_register--;
+					}
+					vmcode->remove(vmcode, i + 1);
+				} else {
+					//func(void)
+					pc[i]->op = OPFASTCALL;
+				}
 			}
 			break;
 		case OPLOAD:
@@ -665,8 +698,10 @@ static void Compiler_compileToFastCode(VirtualMachineCodeArray *vmcode)
 					DBG_P("convert virtual machine code from OPLOAD to OPPOP");
 					pc[i]->op = OPPOP;
 					isFirstPOPFlag = 0;
-				} else if (pc[i + 1]->op == OPFASTCALL ||
-						   pc[i + 2]->op == OPFASTCALL) {
+					fprintf(stderr, "first time\n");
+				} else if ((pc[i + 1]->op == OPFASTCALL) || (pc[i + 1]->op == OPPFASTCALL) ||
+						   (pc[i + 1]->op == OPiPFASTCALL) || (pc[i + 2]->op == OPFASTCALL) ||
+						   (pc[i + 2]->op == OPPFASTCALL) || (pc[i + 2]->op ==  OPiPFASTCALL)) {
 					DBG_P("convert virtual machine code from OPLOAD to OPPOP");
 					pc[i]->op = OPPOP;
 				} else {
@@ -794,7 +829,7 @@ static void Compiler_fixRegNumber(VirtualMachineCodeArray *vmcode)
 		for (j = 0; j < vmcode->size; j++) {
 			switch (pc[j]->op) {
 			case OPPOP: case OPPUSH: case OPiJLC: case OPiPUSHC: case OPiSUBC: case OPiJGC:
-			case OPFASTCALL: case OPCALL: case OPCOPY: case OPMOV:
+			case OPPFASTCALL: case OPiPFASTCALL: case OPFASTCALL: case OPCALL: case OPCOPY: case OPMOV:
 				if (pc[j]->dst == target_reg_num[i]) {
 					pc[j]->dst = target_reg_num[i] - 1;
 				}
@@ -883,6 +918,9 @@ static void Compiler_finalCompile(VirtualMachineCodeArray *vmcode)
 		case OPFASTCALL:
 			OPCREATE2(FASTCALL);
 			break;
+		case OPPFASTCALL:
+			OPCREATE2(PFASTCALL);
+			break;
 		case OPiPUSHC:
 			OPCREATE2(iPUSHC);
 			break;
@@ -945,6 +983,7 @@ inline void VirtualMachine_createDirectThreadingCode(VirtualMachineCode *vmcode,
 #define DISPATCH_START goto *jmp_table[pc->op]
 #define NEXTOP *(pc->opnext)
 #define MAX_REG_SIZE 32
+
 typedef struct recursive_stack {
 	int reg_stack[MAX_REG_SIZE];
 	int function_arg_stack;
@@ -955,7 +994,6 @@ typedef struct recursive_stack {
 static int VirtualMachine_run(VirtualMachineCode *vmcode)
 {
 	DBG_P("=============<<< run >>>===================");
-	//vmcode->dump(vmcode);
 	RecursiveStack _r[MAX_STACK_SIZE];
 	RecursiveStack *r = _r;
 	VirtualMachineCode *pc = vmcode;
@@ -969,6 +1007,7 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 		&&L(OPCALL), &&L(OPJMP), &&L(OPCMP), &&L(OPPOP), &&L(OPPUSH),
 		&&L(OPRET), &&L(OPJL), &&L(OPJG), &&L(OPSTORE), &&L(OPLOAD),
 		&&L(OPiADDC), &&L(OPiSUBC), &&L(OPiJLC), &&L(OPiJGC), &&L(OPFASTCALL),
+		&&L(OPPFASTCALL), &&L(OPiPFASTCALL),
 		&&L(OPiPUSHC), &&L(OPCOPY), &&L(OPTHCODE), &&L(OPNOP),
 		/*FINAL INST*/
 		&&L(OPABADD), &&L(OPACADD), &&L(OPADADD), &&L(OPBCADD),	&&L(OPBDADD), &&L(OPCDADD), 
@@ -981,10 +1020,10 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 		&&L(OPAiJLC), &&L(OPBiJLC), &&L(OPCiJLC), &&L(OPDiJLC),
 		&&L(OPAiJGC), &&L(OPBiJGC),	&&L(OPCiJGC), &&L(OPDiJGC),
 		&&L(OPAFASTCALL), &&L(OPBFASTCALL), &&L(OPCFASTCALL), &&L(OPDFASTCALL),
+		&&L(OPAPFASTCALL), &&L(OPBPFASTCALL), &&L(OPCPFASTCALL), &&L(OPDPFASTCALL),
 		&&L(OPARET), &&L(OPBRET), &&L(OPCRET), &&L(OPDRET),
 		&&L(OPAMOV), &&L(OPBMOV), &&L(OPCMOV), &&L(OPDMOV),
 	};
-
 	r->ret_label_stack = &&L_RETURN;
 	DISPATCH_START;
 	
@@ -1075,7 +1114,7 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 		//load map from virtual memory
 		void *value = fetch_from_virtual_memory(pc->name);
 		if (value == NULL) {
-			fprintf(stderr, "[ERROR] ) undefined variable\n");
+			fprintf(stderr, "[ERROR] : undefined variable\n");
 			return 0;
 		}
 		reg[pc->dst] = (intptr_t)value;
@@ -1090,7 +1129,7 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 		DBG_P("OPCALL");
 		VirtualMachineCode *func_vmcode = (VirtualMachineCode *)fetch_from_virtual_memory(pc->name);
 		if (func_vmcode == NULL) {
-			fprintf(stderr, "[ERROR] ) undefined function name [%s]\n", pc->name);
+			fprintf(stderr, "[ERROR] : undefined function name [%s]\n", pc->name);
 			return 0;
 		}
 		local_cache_func_vmcode = func_vmcode;
@@ -1101,16 +1140,12 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 		goto NEXTOP;
 	L_CALLAFTER:
 		DBG_P("L_CALLAFTER");
-		DBG_P("stack_count = [%d]", stack_count);
 		pc = r->pc_stack;
 		int res = reg[0];
+		DBG_P("res = [%d]", res);
 		memcpy(reg, r->reg_stack, MAX_REG_SIZE);
-		//stack_count--;
 		r--;
-		DBG_P("reg[0] = [%d]", res);
-		DBG_P("reg[0] = [%d]", reg[0]);
 		reg[pc->dst] = res;
-		//reg[0] = res;
 		pc++;
 		goto NEXTOP;
 	}
@@ -1127,30 +1162,68 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 		goto NEXTOP;
 	L_FASTCALLAFTER:
 		DBG_P("L_FASTCALLAFTER");
-		DBG_P("stack_count = [%d]", stack_count);
 		pc = r->pc_stack;
 		int res = reg[0];
-		DBG_P("res = [%d]", res);
 		memcpy(reg, r->reg_stack, MAX_REG_SIZE);
-		//stack_count--;
 		r--;
-		DBG_P("L_FASTCALLAFTER: reg[0] = [%d]", res);
 		reg[pc->dst] = res;
+		pc++;
+		goto NEXTOP;
+	}
+	CASE(OPPFASTCALL) {
+		DBG_P("OPPFASTCALL");
+		//======PUSH SECTION========//
+		r++;
+		r->function_arg_stack = reg[pc->dst];
+		//======FASTCALL SECTION======//
+		r->ret_label_stack = &&L_PFASTCALLAFTER;
+		r->pc_stack = pc;
+		memcpy(r->reg_stack, reg, MAX_REG_SIZE);
+		pc = local_cache_func_vmcode;
+		goto NEXTOP;
+	L_PFASTCALLAFTER:
+		DBG_P("L_PFASTCALLAFTER");
+		pc = r->pc_stack;
+		int res = reg[0];
+		memcpy(reg, r->reg_stack, MAX_REG_SIZE);
+		r--;
+		reg[pc->dst] = res;
+		//============================//
+		pc++;
+		goto NEXTOP;
+	}
+	CASE(OPiPFASTCALL) {
+		DBG_P("OPiPFASTCALL");
+		//======iPUSHC SECTION========//
+		r++;
+		r->function_arg_stack = pc->src;
+		pc++;
+		//======FASTCALL SECTION======//
+		r->ret_label_stack = &&L_iPFASTCALLAFTER;
+		r->pc_stack = pc;
+		memcpy(r->reg_stack, reg, MAX_REG_SIZE);
+		pc = local_cache_func_vmcode;
+		goto NEXTOP;
+	L_iPFASTCALLAFTER:
+		DBG_P("L_FASTCALLAFTER");
+		pc = r->pc_stack;
+		int res = reg[0];
+		memcpy(reg, r->reg_stack, MAX_REG_SIZE);
+		r--;
+		reg[pc->dst] = res;
+		//============================//
 		pc++;
 		goto NEXTOP;
 	}
 	CASE(OPPUSH) {
 		DBG_P("OPPUSH");
-		//stack_count++;
 		r++;
 		r->function_arg_stack = reg[pc->dst];
-		//DBG_P("function_arg_stack[stack_count] = [%d]", function_arg_stack[stack_count]);
 		pc++;
 		goto NEXTOP;
 	}
 	CASE(OPiPUSHC) {
 		DBG_P("OPiPUSH");
-		//stack_count++;
 		r++;
 		r->function_arg_stack = pc->src;
 		pc++;
@@ -1158,17 +1231,14 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 	}
 	CASE(OPPOP) {
 		DBG_P("OPPOP");
-		DBG_P("function_arg_stack[arg_stack_count] = [%d]", function_arg_stack[stack_count]);
 		cur_arg = r->function_arg_stack;
 		reg[pc->dst] = cur_arg;
-		DBG_P("reg[%d] = [%d]", pc->dst, cur_arg);
 		pc++;
 		goto NEXTOP;
 	}
 	CASE(OPCOPY) {
 		DBG_P("OPCOPY");
 		reg[pc->dst] = cur_arg;
-		DBG_P("reg[%d] = [%d]", pc->dst, cur_arg);
 		pc++;
 		goto NEXTOP;
 	}
@@ -1185,10 +1255,7 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 	CASE(OPRET) {
 		DBG_P("OPRET");
 		reg[0] = reg[pc->src];
-		DBG_P("reg[0] = [%d]", reg[0]);
-		DBG_P("stack_count = [%d]", stack_count);
 		goto *r->ret_label_stack;
-		//return reg[0];
 	}
 #include "finalinst.c"
 L_RETURN:
