@@ -698,7 +698,6 @@ static void Compiler_compileToFastCode(VirtualMachineCodeArray *vmcode)
 					DBG_P("convert virtual machine code from OPLOAD to OPPOP");
 					pc[i]->op = OPPOP;
 					isFirstPOPFlag = 0;
-					fprintf(stderr, "first time\n");
 				} else if ((pc[i + 1]->op == OPFASTCALL) || (pc[i + 1]->op == OPPFASTCALL) ||
 						   (pc[i + 1]->op == OPiPFASTCALL) || (pc[i + 2]->op == OPFASTCALL) ||
 						   (pc[i + 2]->op == OPPFASTCALL) || (pc[i + 2]->op ==  OPiPFASTCALL)) {
@@ -994,10 +993,10 @@ typedef struct recursive_stack {
 static int VirtualMachine_run(VirtualMachineCode *vmcode)
 {
 	DBG_P("=============<<< run >>>===================");
+	int eax = 0; int ebx = 0; int ecx = 0; int edx = 0;
 	RecursiveStack _r[MAX_STACK_SIZE];
 	RecursiveStack *r = _r;
 	VirtualMachineCode *pc = vmcode;
-
 	int reg[MAX_REG_SIZE] = {0};
 	VirtualMachineCode *local_cache_func_vmcode = NULL;
 	int cur_arg = -1; //this value is flag that copys pop num to all function argument
@@ -1259,7 +1258,7 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 	}
 #include "finalinst.c"
 L_RETURN:
-	//reg[0] += reg[0];
+	reg[0] += eax;
 	return reg[0];
 }
 
