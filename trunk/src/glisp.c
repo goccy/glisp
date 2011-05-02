@@ -1,14 +1,6 @@
 #include <glisp.h>
 
 static int brace_count = 0;
-static void glisp_init_table(void)
-{
-	hash_table = new_HashTable();
-	search_htop = hash_table;
-	func_table = new_FuncTable();
-	search_ftop = func_table;
-	func_ptr = NULL;
-}
 
 static void glisp_init(void)
 {
@@ -18,7 +10,6 @@ static void glisp_init(void)
 	addHistory("(fib 36)");
 	addHistory("(setq x 4)");
 	addHistory("(defun func(n) (+ n 2))");
-	glisp_init_table();
 	brace_count = 0;
 }
 
@@ -72,11 +63,11 @@ static void glisp_main(Tokenizer *t, Parser *p, char *line)
 		}
 		DBG_P("===================");
 		vm->clear();
-		vm->delete(vm);
-		vmcode->delete(vmcode);
-		c->delete(c);
-		t->delete(token);
-		p->delete(root);
+		vm->free(vm);
+		vmcode->free(vmcode);
+		c->free(c);
+		t->free(token);
+		p->free(root);
 	}
 }
 
@@ -89,12 +80,10 @@ void glisp_start_shell(void)
 	Parser *p = new_Parser();
 	while (true) {
 		if (line == NULL) {
-			line = greadline(">>>");
+			line = greadline(">>> ");
 		}
 		if (!strncmp(line, "quit", sizeof("quit")) ||
 			!strncmp(line, "exit", sizeof("exit"))) {
-			deleteHashTable();
-			deleteFuncTable(p);
 			exit(0);
 		}
 		addHistory(line);
@@ -135,7 +124,6 @@ void glisp_start_script(char *file_name)
 		exit(EXIT_FAILURE);
 		return;
 	}
-	glisp_init_table();
 	Tokenizer *t = new_Tokenizer();
 	Parser *p = new_Parser();
 	while (fgets(line, MAX_LINE_SIZE, fp) != NULL) {
@@ -154,8 +142,6 @@ void glisp_start_script(char *file_name)
 	}
 	fclose(fp);
 	clear_virtual_memory();
-	deleteHashTable();
-	deleteFuncTable(p);
 	free(t);
 	free(p);
 }

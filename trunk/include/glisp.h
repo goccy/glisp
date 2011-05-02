@@ -59,12 +59,12 @@ typedef struct _GMap {
 
 typedef struct _Tokenizer {
 	char **(*split)(char *line);
-	void (*delete)(char **token);
+	void (*free)(char **token);
 } Tokenizer;
 
 typedef struct _Parser {
 	Conscell *(*parse)(char **token);
-	void (*delete)(Conscell *root);
+	void (*free)(Conscell *root);
 } Parser;
 
 typedef struct _HashTable {
@@ -179,7 +179,7 @@ typedef struct _VirtualMachineCode {
 
 typedef struct VirtualMachineCodeAPI {
 	void (*dump)(struct _VirtualMachineCode *vmcode);
-	void (*delete)(struct _VirtualMachineCode *vmcode);
+	void (*free)(struct _VirtualMachineCode *vmcode);
 } VirtualMachineCodeAPI;
 
 typedef struct _VirtualMachineCodeArray {
@@ -191,7 +191,7 @@ typedef struct _VirtualMachineCodeArray {
 	void (*remove)(struct _VirtualMachineCodeArray *array, int num);
 	void (*reverse)(struct _VirtualMachineCodeArray *array);
 	VirtualMachineCode *(*getPureCode)(struct _VirtualMachineCodeArray *array);
-	void (*delete)(struct _VirtualMachineCodeArray *array);
+	void (*free)(struct _VirtualMachineCodeArray *array);
 } VirtualMachineCodeArray;
 
 typedef struct _Compiler {
@@ -202,7 +202,7 @@ typedef struct _Compiler {
 	void (*fixRegNumber)(VirtualMachineCodeArray *vmcode);
 	int (*getMaxRegNumber)(VirtualMachineCodeArray *vmcode);
 	void (*finalCompile)(VirtualMachineCodeArray *vmcode);
-	void (*delete)(struct _Compiler *c);
+	void (*free)(struct _Compiler *c);
 } Compiler;
 
 typedef struct _VirtualMachine {
@@ -210,7 +210,7 @@ typedef struct _VirtualMachine {
 	void (*setVariable)(VirtualMachineCode *vmcode, int size, int var);
 	void (*setFunction)(VirtualMachineCode *vmcode, int size);
 	void (*clear)(void);
-	void (*delete)(struct _VirtualMachine *vm);
+	void (*free)(struct _VirtualMachine *vm);
 } VirtualMachine;
 
 typedef enum {
@@ -240,35 +240,14 @@ typedef enum {
 
 void glisp_start_shell(void);
 void glisp_start_script(char *file_name);
+void* gmalloc(size_t size);
+int gmatch(const char *i, const char *you);
+void clear_virtual_memory(void);
+
 Tokenizer *new_Tokenizer(void);
 Parser *new_Parser(void);
 Compiler *new_Compiler(void);
 VirtualMachineCode *new_VirtualMachineCode(Conscell *c, int base_count);
 VirtualMachineCodeArray *new_VirtualMachineCodeArray(void);
 VirtualMachine *new_VirtualMachine(void);
-void clear_virtual_memory(void);
 
-Conscell* eval(Conscell *root);
-
-HashTable* new_HashTable(void);
-int getValFromHashTable(char *key);
-void setToHashTable(char *key, int value);
-HashTable* searchHashTable(char *key);
-
-FuncTable* new_FuncTable(void);
-FuncTable* searchFuncTable(char* func_name);
-void setToFuncTable(char *func_name, char **args, Conscell *root);
-FuncTable* getFuncTable(char *func_name);
-
-void deleteHashTable(void);
-void deleteFuncTable(Parser *p);
-void deleteKeyFromHashTable(char *key);
-
-void* gmalloc(size_t size);
-int gmatch(const char *i, const char *you);
-/*Global Variable*/
-HashTable *hash_table;
-HashTable *search_htop;
-FuncTable *func_table;
-FuncTable *search_ftop;
-FuncTable *func_ptr;

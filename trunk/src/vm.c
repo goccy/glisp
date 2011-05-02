@@ -337,7 +337,7 @@ static VirtualMachineCodeAPI *new_VirtualMachineCodeAPI(void)
 {
 	VirtualMachineCodeAPI *ret = (VirtualMachineCodeAPI *)gmalloc(sizeof(VirtualMachineCodeAPI));
 	ret->dump = VirtualMachineCode_dump;
-	ret->delete = VirtualMachineCode_delete;
+	ret->free = VirtualMachineCode_delete;
 	return ret;
 }
 
@@ -962,7 +962,7 @@ Compiler *new_Compiler(void)
 	ret->finalCompile = Compiler_finalCompile;
 	VirtualMachineCode *code = new_VirtualMachineCode(NULL, 0);//OPRET
 	ret->vmcodes->add(ret->vmcodes, code);
-	ret->delete = Compiler_delete;
+	ret->free = Compiler_delete;
 	return ret;
 }
 
@@ -1750,6 +1750,6 @@ VirtualMachine *new_VirtualMachine(void)
 	ret->setVariable = VirtualMachine_setVariable;
 	ret->setFunction = VirtualMachine_setFunction;
 	ret->clear = VirtualMachine_clear;
-	ret->delete = VirtualMachine_delete;
+	ret->free = VirtualMachine_delete;
 	return ret;
 }

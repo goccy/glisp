@@ -242,6 +242,6 @@ Parser *new_Parser(void)
 {
 	Parser *p = (Parser *)gmalloc(sizeof(Parser));
 	p->parse = Parser_parse;
-	p->delete = Parser_delete;
+	p->free = Parser_delete;
 	return p;
 }

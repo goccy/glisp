@@ -50,7 +50,7 @@ static void VirtualMachineCodeArray_dump(VirtualMachineCodeArray *array)
 
 static void VirtualMachineCodeArray_remove(VirtualMachineCodeArray *array, int num)
 {
-	(array->a[num])->api->delete(array->a[num]);
+	(array->a[num])->api->free(array->a[num]);
 	size_t i = 0;
 	for (i = num; i < array->size - 1; i++) {
 		array->a[i] = array->a[i + 1];
@@ -64,7 +64,7 @@ static void VirtualMachineCodeArray_delete(VirtualMachineCodeArray *array)
 	size_t i = 0;
 	VirtualMachineCode **code = array->a;
 	for (i = 0; i < array->size; i++) {
-		code[i]->api->delete(code[i]);
+		code[i]->api->free(code[i]);
 		code[i] = NULL;
 	}
 	free(array->a);
@@ -97,6 +97,6 @@ VirtualMachineCodeArray *new_VirtualMachineCodeArray(void)
 	vm_array->remove = VirtualMachineCodeArray_remove;
 	vm_array->reverse = VirtualMachineCodeArray_reverse;
 	vm_array->getPureCode = VirtualMachineCodeArray_getPureCode;
-	vm_array->delete = VirtualMachineCodeArray_delete;
+	vm_array->free = VirtualMachineCodeArray_delete;
 	return vm_array;
 }

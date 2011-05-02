@@ -139,6 +139,6 @@ Tokenizer *new_Tokenizer(void)
 {
 	Tokenizer *t = (Tokenizer *)gmalloc(sizeof(Tokenizer));
 	t->split = Tokenizer_split;
-	t->delete = Tokenizer_delete;
+	t->free = Tokenizer_delete;
 	return t;
 }
