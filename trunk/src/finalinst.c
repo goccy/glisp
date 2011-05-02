@@ -15,16 +15,14 @@ CASE(OPADADD) {
 }
 CASE(OPBCADD) {
 	DBG_P("OPBCADD : ");
-	asm volatile("header:");
 	ebx += ecx;
-	asm volatile("footer:");
 	/*
 	__asm {
 		mov eax, ebx;
 		mov ebx, ecx;
 		add eax, ebx;
 		mov ebx, eax;
-	}
+		}
 	*/
 	//asm volatile ("mov ebx, %eax");
 	//asm volatile ("mov ecx, %ebx");
@@ -176,87 +174,57 @@ CASE(OPDCOPY) {
 }
 CASE(OPAiJLC) {
 	DBG_P("OPAiJLC : ");
-	if (eax < pc->src) {
-		pc += pc->jmp;
-	} else {
-		pc++;
-	}
+	pc += (eax < pc->src) ? pc->jmp : 1;
 	goto NEXTOP;
 }
 CASE(OPBiJLC) {
 	DBG_P("OPBiJLC : ");
-	if (ebx < pc->src) {
-		pc += pc->jmp;
-	} else {
-		pc++;
-	}
+	pc += (ebx < pc->src) ? pc->jmp : 1;
 	goto NEXTOP;
 }
 CASE(OPCiJLC) {
 	DBG_P("OPCiJLC : ");
-	if (ecx < pc->src) {
-		pc += pc->jmp;
-	} else {
-		pc++;
-	}
+	pc += (ecx < pc->src) ? pc->jmp : 1;
 	goto NEXTOP;
 }
 CASE(OPDiJLC) {
 	DBG_P("OPDiJLC : ");
-	if (edx < pc->src) {
-		pc += pc->jmp;
-	} else {
-		pc++;
-	}
+	pc += (edx < pc->src) ? pc->jmp : 1;
 	goto NEXTOP;
 }
 CASE(OPAiJGC) {
 	DBG_P("OPAiJGC : ");
-	if (eax > pc->src) {
-		pc += pc->jmp;
-	} else {
-		pc++;
-	}
+	pc += (eax > pc->src) ? pc->jmp : 1;
 	goto NEXTOP;
 }
 CASE(OPBiJGC) {
 	DBG_P("OPBiJGC : ");
-	if (ebx > pc->src) {
-		pc += pc->jmp;
-	} else {
-		pc++;
-	}
+	pc += (ebx > pc->src) ? pc->jmp : 1;
 	goto NEXTOP;
 }
 CASE(OPCiJGC) {
 	DBG_P("OPCiJGC : ");
-	if (ecx > pc->src) {
-		pc += pc->jmp;
-	} else {
-		pc++;
-	}
+	pc += (ecx > pc->src) ? pc->jmp : 1;
 	goto NEXTOP;
 }
 CASE(OPDiJGC) {
 	DBG_P("OPDiJGC : ");
-	if (edx > pc->src) {
-		pc += pc->jmp;
-	} else {
-		pc++;
-	}
+	pc += (edx > pc->src) ? pc->jmp : 1;
 	goto NEXTOP;
 }
+
+#define regsize sizeof(int) * 4
 CASE(OPAFASTCALL) {
 	DBG_P("OPAFASTCALL : ");
 	r->ret_label_stack = &&L_AFASTCALLAFTER;
 	r->pc_stack = pc;
-	memcpy(r->reg_stack, reg, 4 * 4);
+	memcpy(r->reg_stack, reg, regsize);
 	pc = local_cache_func_vmcode;
 	goto NEXTOP;
 L_AFASTCALLAFTER:
 	DBG_P("L_AFASTCALLAFTER");
 	pc = r->pc_stack;
-	memcpy(reg, r->reg_stack, 4 * 4);
+	memcpy(reg, r->reg_stack, regsize);
 	r--;
 	pc++;
 	goto NEXTOP;
@@ -265,14 +233,14 @@ CASE(OPBFASTCALL) {
 	DBG_P("OPBFASTCALL : ");
 	r->ret_label_stack = &&L_BFASTCALLAFTER;
 	r->pc_stack = pc;
-	memcpy(r->reg_stack, reg, 16);
+	memcpy(r->reg_stack, reg, regsize);
 	pc = local_cache_func_vmcode;
 	goto NEXTOP;
 L_BFASTCALLAFTER:
 	DBG_P("L_BFASTCALLAFTER");
 	pc = r->pc_stack;
 	int res = eax;
-	memcpy(reg, r->reg_stack, 16);
+	memcpy(reg, r->reg_stack, regsize);
 	r--;
 	ebx = res;
 	pc++;
@@ -282,14 +250,14 @@ CASE(OPCFASTCALL) {
 	DBG_P("OPCFASTCALL : ");
 	r->ret_label_stack = &&L_CFASTCALLAFTER;
 	r->pc_stack = pc;
-	memcpy(r->reg_stack, reg, 16);
+	memcpy(r->reg_stack, reg, regsize);
 	pc = local_cache_func_vmcode;
 	goto NEXTOP;
 L_CFASTCALLAFTER:
 	DBG_P("L_CFASTCALLAFTER");
 	pc = r->pc_stack;
 	int res = eax;
-	memcpy(reg, r->reg_stack, 16);
+	memcpy(reg, r->reg_stack, regsize);
 	r--;
 	ecx = res;
 	pc++;
@@ -299,14 +267,14 @@ CASE(OPDFASTCALL) {
 	DBG_P("OPDFASTCALL : ");
 	r->ret_label_stack = &&L_DFASTCALLAFTER;
 	r->pc_stack = pc;
-	memcpy(r->reg_stack, reg, 16);
+	memcpy(r->reg_stack, reg, regsize);
 	pc = local_cache_func_vmcode;
 	goto NEXTOP;
 L_DFASTCALLAFTER:
 	DBG_P("L_DFASTCALLAFTER");
 	pc = r->pc_stack;
 	int res = eax;
-	memcpy(reg, r->reg_stack, 16);
+	memcpy(reg, r->reg_stack, regsize);
 	r--;
 	edx = res;
 	pc++;
@@ -320,13 +288,13 @@ CASE(OPAPFASTCALL) {
 	//=======================//
 	r->ret_label_stack = &&L_APFASTCALLAFTER;
 	r->pc_stack = pc;
-	memcpy(r->reg_stack, reg, 4 * 4);
+	memcpy(r->reg_stack, reg, regsize);
 	pc = local_cache_func_vmcode;
 	goto NEXTOP;
 L_APFASTCALLAFTER:
 	DBG_P("L_APFASTCALLAFTER");
 	pc = r->pc_stack;
-	memcpy(reg, r->reg_stack, 4 * 4);
+	memcpy(reg, r->reg_stack, regsize);
 	r--;
 	pc++;
 	goto NEXTOP;
@@ -340,11 +308,11 @@ CASE(OPBPFASTCALL) {
 	DBG_P("arg = [%d]", ebx);
 	r->ret_label_stack = &&L_BPFASTCALLAFTER;
 	r->pc_stack = pc;
-	//memcpy(r->reg_stack, reg, 16);
-	r->reg_stack[0] = eax;
-	r->reg_stack[1] = ebx;
-	r->reg_stack[2] = ecx;
-	r->reg_stack[3] = edx;
+	memcpy(r->reg_stack, reg, regsize);
+	//r->reg_stack[0] = eax;
+	//r->reg_stack[1] = ebx;
+	//r->reg_stack[2] = ecx;
+	//r->reg_stack[3] = edx;
 	pc = local_cache_func_vmcode;
 	goto NEXTOP;
 L_BPFASTCALLAFTER:
@@ -352,17 +320,18 @@ L_BPFASTCALLAFTER:
 	pc = r->pc_stack;
 	int res = eax;
 	DBG_P("res = [%d]", res);
-	//memcpy(reg, r->reg_stack, 16);
-	eax = r->reg_stack[0];
+	memcpy(reg, r->reg_stack, regsize);
+	//eax = r->reg_stack[0];
 	//ebx = r->reg_stack[1];
-	ecx = r->reg_stack[2];
-	edx = r->reg_stack[3];
+	//ecx = r->reg_stack[2];
+	//edx = r->reg_stack[3];
 	r--;
 	ebx = res;
 	pc++;
 	goto NEXTOP;
 }
 CASE(OPCPFASTCALL) {
+	asm volatile("header:");
 	DBG_P("OPCPFASTCALL : ");
 	//=========CPUSH=========//
 	r++;
@@ -371,11 +340,11 @@ CASE(OPCPFASTCALL) {
 	DBG_P("arg = [%d]", ecx);
 	r->ret_label_stack = &&L_CPFASTCALLAFTER;
 	r->pc_stack = pc;
-	//memcpy(r->reg_stack, reg, 16);
-	r->reg_stack[0] = eax;
-	r->reg_stack[1] = ebx;
-	r->reg_stack[2] = ecx;
-	r->reg_stack[3] = edx;
+	memcpy(r->reg_stack, reg, regsize);
+	//r->reg_stack[0] = eax;
+	//r->reg_stack[1] = ebx;
+	//r->reg_stack[2] = ecx;
+	//r->reg_stack[3] = edx;
 	pc = local_cache_func_vmcode;
 	goto NEXTOP;
 L_CPFASTCALLAFTER:
@@ -384,15 +353,16 @@ L_CPFASTCALLAFTER:
 	pc = r->pc_stack;
 	int res = eax;
 	DBG_P("res = [%d]", res);
-	//memcpy(reg, r->reg_stack, 16);
-	eax = r->reg_stack[0];
-	ebx = r->reg_stack[1];
+	memcpy(reg, r->reg_stack, regsize);
+	//eax = r->reg_stack[0];
+	//ebx = r->reg_stack[1];
 	//ecx = r->reg_stack[2];
-	edx = r->reg_stack[3];
+	//edx = r->reg_stack[3];
 	r--;
 	ecx = res;
 	pc++;
 	goto NEXTOP;
+	asm volatile("footer:");
 }
 CASE(OPDPFASTCALL) {
 	DBG_P("OPDPFASTCALL : ");
@@ -402,14 +372,14 @@ CASE(OPDPFASTCALL) {
 	//=======================//
 	r->ret_label_stack = &&L_DPFASTCALLAFTER;
 	r->pc_stack = pc;
-	memcpy(r->reg_stack, reg, 16);
+	memcpy(r->reg_stack, reg, regsize);
 	pc = local_cache_func_vmcode;
 	goto NEXTOP;
 L_DPFASTCALLAFTER:
 	DBG_P("L_DPFASTCALLAFTER");
 	pc = r->pc_stack;
 	int res = eax;
-	memcpy(reg, r->reg_stack, 16);
+	memcpy(reg, r->reg_stack, regsize);
 	r--;
 	edx = res;
 	pc++;
