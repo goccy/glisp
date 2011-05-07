@@ -35,13 +35,12 @@ static void glisp_main(Tokenizer *t, Parser *p, char *line)
 		Conscell *root = p->parse(token);
 		Compiler *c = new_Compiler();
 		VirtualMachineCodeArray *vmcode = c->compile(c, root->cdr);
-		//vmcode->dump(vmcode);
 		VirtualMachine *vm = new_VirtualMachine();
+		vmcode->dump(vmcode);
 		c->compileToFastCode(vmcode);
 		VirtualMachineCode *thcode = new_VirtualMachineCode(NULL, 0);
 		thcode->op = OPTHCODE;
 		vmcode->add(vmcode, thcode);
-		vmcode->dump(vmcode);
 		c->fixRegNumber(vmcode);
 		if (c->getMaxRegNumber(vmcode) < 4) {
 			c->finalCompile(vmcode);

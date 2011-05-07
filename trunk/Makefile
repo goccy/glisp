@@ -1,8 +1,10 @@
-#CC = gcc -m64
-CC = g++ -m64
+CC = gcc -m64
+#CC = g++ -m64
 READLINE_DIR = lib/greadline
-CFLAGS = -O2 -Wall -W -fomit-frame-pointer -I./include/ -I$(READLINE_DIR)/include/
-#CFLAGS = -O0 -g3 -DDEBUG_MODE -Wall -W -I./include/ -I$(READLINE_DIR)/include
+#CFLAGS = -O2 -Wall -W -fomit-frame-pointer -I./include/ -I$(READLINE_DIR)/include/
+CFLAGS = -O2 -Wall -W -DUSING_SELECTIVE_INLINING -fomit-frame-pointer -I./include/ -I$(READLINE_DIR)/include/
+#CFLAGS = -O0 -g3 -DDEBUG_MODE  -Wall -W -I./include/ -I$(READLINE_DIR)/include
+#CFLAGS = -O0 -g0 -Wall -W -I./include/ -I$(READLINE_DIR)/include
 READLINE_CFLAGS= -Os -Wall -W -I$(READLINE_DIR)/include/
 LDLIBS = 
 target = glisp

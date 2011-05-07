@@ -10,8 +10,6 @@ GMap *new_GMap(const char *key, void *value, CellType type)
 	strncpy((char *)ret->key, key, strlen(key) + 1);
 	ret->value = value;
 	ret->type = type;
-	//fprintf(stderr, "key = [%s]\n", key);
-	//fprintf(stderr, "value = [%d]\n", (int)value);
 	return ret;
 }
 
@@ -43,8 +41,6 @@ void clear_virtual_memory(void)
 			VirtualMachineCode *code = (VirtualMachineCode *)map->value;
 			free(--code);
 		}
-		//free((char *)map->key);
-		//free(map->value);
 		i++;
 	}
 }
@@ -136,6 +132,9 @@ static void VirtualMachineCode_dump(VirtualMachineCode *code)
 		break;
 	case OPiSUBC:
 		DBG_PL("OPiSUBC : ");
+		break;
+	case OPiADDC:
+		DBG_PL("OPiADDC : ");
 		break;
 	case OPiPUSHC:
 		DBG_PL("OPiPUSHC : ");
@@ -310,6 +309,12 @@ static void VirtualMachineCode_dump(VirtualMachineCode *code)
 		break;
 	case OPDMOV:
 		DBG_PL("OPDMOV : ");
+		break;
+	case GOTO_BLOCK:
+		DBG_PL("GOTO_BLOCK : ");
+		break;
+	case RET_BLOCK:
+		DBG_PL("RET_BLOCK : ");
 		break;
 	default:
 		break;
@@ -714,13 +719,10 @@ static void Compiler_compileToFastCode(VirtualMachineCodeArray *vmcode)
 			break;
 		case OPJL:
 			if (pc[i + 1]->op == OPMOV ||
-				pc[i + 2]->op == OPMOV) {
-				DBG_P("CONST JMP");
-				pc[i]->op = OPiJLC;
-				if (pc[i + 1]->op == OPMOV) {
-					pc[i]->src = pc[i + 1]->src;
-					vmcode->remove(vmcode, i + 1);
-				} else {
+				pc[i + 1]->op == OPPOP) {
+				if (pc[i + 2]->op == OPMOV) {
+					DBG_P("CONST JMP");
+					pc[i]->op = OPiJLC;
 					pc[i]->src = pc[i + 2]->src;
 					vmcode->remove(vmcode, i + 2);
 				}
@@ -730,14 +732,16 @@ static void Compiler_compileToFastCode(VirtualMachineCodeArray *vmcode)
 			break;
 		case OPJG:
 			if (pc[i + 1]->op == OPMOV ||
-				pc[i + 2]->op == OPMOV) {
-				DBG_P("CONST JMP");
-				pc[i]->op = OPiJGC;
-				if (pc[i + 1]->op == OPMOV) {
-					pc[i]->dst = pc[i + 1]->src;
-					vmcode->remove(vmcode, i + 1);
-				} else {
-					pc[i]->dst = pc[i + 2]->src;
+				pc[i + 1]->op == OPPOP) {
+				//if (pc[i + 1]->op == OPMOV) {
+				//pc[i]->src = pc[i + 1]->src;
+					//pc[i + 2]->dst = pc[i]->dst;
+					//vmcode->remove(vmcode, i + 1);
+				//} else {
+				if (pc[i + 2]->op == OPMOV) {
+					DBG_P("CONST JMP");
+					pc[i]->op = OPiJGC;
+					pc[i]->src = pc[i + 2]->src;
 					vmcode->remove(vmcode, i + 2);
 				}
 			}
@@ -748,7 +752,7 @@ static void Compiler_compileToFastCode(VirtualMachineCodeArray *vmcode)
 			vmcode->remove(vmcode, i);
 			break;
 		case OPSUB:
-			if (pc[i + 1]->op == OPMOV ||
+			if (//pc[i + 1]->op == OPMOV ||
 				pc[i + 2]->op == OPMOV) {
 				DBG_P("CONST SUB");
 				pc[i]->op = OPiSUBC;
@@ -757,13 +761,25 @@ static void Compiler_compileToFastCode(VirtualMachineCodeArray *vmcode)
 					pc[jl_register]->jmp--;
 					jl_register--;
 				}
-				if (pc[i + 1]->op == OPMOV) {
-					pc[i]->src = pc[i + 1]->src;
-					vmcode->remove(vmcode, i + 1);
-				} else {
+				//if (pc[i + 1]->op == OPMOV) {
+				//pc[i]->src = pc[i + 1]->src;
+				//vmcode->remove(vmcode, i + 1);
+				//} else {
+				if (pc[i + 2]->op == OPMOV) {
 					pc[i]->src = pc[i + 2]->src;
 					vmcode->remove(vmcode, i + 2);
 				}
+			}
+			break;
+		case OPADD:
+			if (pc[i + 2]->op == OPMOV) {
+				pc[i]->op = OPiADDC;
+				if (jl_register != -1) {
+					pc[jl_register]->jmp--;
+					jl_register--;
+				}
+				pc[i]->src = pc[i + 2]->src;
+				vmcode->remove(vmcode, i + 2);
 			}
 			break;
 		case OPSTORE: {
@@ -980,10 +996,83 @@ inline void VirtualMachine_createDirectThreadingCode(VirtualMachineCode *vmcode,
 	}
 }
 
-static void VirtualMachine_selectiveInlining()
+#include <sys/mman.h>
+#include <unistd.h>
+typedef void (*Function)(void);
+typedef struct _InstBlock {
+	void *start;
+	void *end;
+} InstBlock;
+
+static void *gxmalloc(void)
 {
-	//memcpy(codeptr + pos, start_label, len);
-	//pos += len;
+	int pagesize = sysconf(_SC_PAGE_SIZE);
+	DBG_P("pagesize = [%d]", pagesize);
+	if (pagesize < 0) perror("sysconf");
+	void *_codeptr = (void *)gmalloc(pagesize * 10L);
+	void *codeptr = (void *)((long)_codeptr & ~(pagesize - 1L));
+	memset(codeptr, 0xc3, pagesize * 10L);
+	if (mprotect(codeptr, pagesize * 10L, PROT_WRITE|PROT_READ|PROT_EXEC) < 0) perror("mprotect");
+	return codeptr;
+}
+
+static void VirtualMachine_createSelectiveInliningCode(VirtualMachineCode *vmcode, void **jmp_table, InstBlock *block_table)
+{
+	//void *codeptr = gxmalloc();
+	int pos = 0;
+	VirtualMachineCode *pc = vmcode;
+	VirtualMachineCode *tmp = vmcode;
+	pc++;//skip THCODE
+	tmp++;
+	while (1) {
+		if (pc->op == OPSTORE) break;
+		pc->code = gxmalloc();
+		pos = 0;
+		for (; tmp->api != NULL; tmp++) {
+			switch (tmp->op) {
+			case OPJL: case OPJG: case OPiJLC: case OPiJGC:
+			case OPDiJLC: case OPRET:
+			case OPARET: case OPBRET: case OPCRET: case OPDRET: {
+				InstBlock block = block_table[tmp->op];
+				int len = block.end - block.start;
+				memcpy(pc->code + pos, block.start, len);
+				pos += len;
+				tmp->api->dump(tmp);
+				DBG_P("len = [%d]", len);
+				goto BREAK;
+			}
+			case OPLOAD: case OPCALL: case OPCPFASTCALL: case OPBPFASTCALL: {
+				goto BREAK;
+			}
+			default: {
+				InstBlock block = block_table[tmp->op];
+				int len = block.end - block.start;
+				memcpy(pc->code + pos, block.start, len);
+				pos += len;
+				tmp->api->dump(tmp);
+				DBG_P("len = [%d]", len);
+				break;
+			}
+			}
+		}
+	BREAK:;
+		DBG_P("=====================================");
+		if (tmp->op == OPLOAD || tmp->op == OPCALL || tmp->op == OPCPFASTCALL || tmp->op == OPBPFASTCALL) {
+		} else if (tmp->op == OPRET || tmp->op == OPARET || tmp->op == OPBRET ||
+				   tmp->op == OPCRET || tmp->op == OPDRET) {
+			pc->op = RET_BLOCK;
+			pc->opnext = jmp_table[pc->op];
+		} else {
+			pc->op = GOTO_BLOCK;
+			pc->opnext = jmp_table[pc->op];
+		}
+		if ((tmp + 1)->api != NULL) {
+			tmp++;
+		} else {
+			break;
+		}
+		pc = tmp;
+	}
 }
 
 #define L(op) L_##op
@@ -996,6 +1085,8 @@ static void VirtualMachine_selectiveInlining()
 #define NEXTOP *(pc->opnext)
 #define MAX_REG_SIZE 32
 #define regsize sizeof(int) * 4
+#define START(op) L_##op##_START:
+#define END(op) L_##op##_END:
 
 typedef struct recursive_stack {
 	int reg_stack[MAX_REG_SIZE];
@@ -1004,6 +1095,11 @@ typedef struct recursive_stack {
 	VirtualMachineCode *pc_stack;
 } RecursiveStack;
 
+#ifdef _X86_
+#define PUSH(reg, arg, label, pc) {				\
+		asm volatile("push reg");				\
+	}
+#else
 #define PUSH(reg, arg, label, pc) {				\
 		r++;									\
 		r->function_arg_stack = arg;			\
@@ -1011,7 +1107,7 @@ typedef struct recursive_stack {
 		r->pc_stack = pc;						\
 		memcpy(r->reg_stack, reg, regsize);		\
 	}											
-
+#endif
 #define POP() {									\
 		pc = r->pc_stack;						\
 		memcpy(reg, r->reg_stack, regsize);		\
@@ -1053,70 +1149,126 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 		&&L(OPAPFASTCALL), &&L(OPBPFASTCALL), &&L(OPCPFASTCALL), &&L(OPDPFASTCALL),
 		&&L(OPARET), &&L(OPBRET), &&L(OPCRET), &&L(OPDRET),
 		&&L(OPAMOV), &&L(OPBMOV), &&L(OPCMOV), &&L(OPDMOV),
+		&&L(GOTO_BLOCK), &&L(RET_BLOCK),
+	};
+	static InstBlock block_table[] = {
+		{&&L(OPMOV_START), &&L(OPMOV_END)}, {&&L(OPADD_START), &&L(OPADD_END)}, {&&L(OPSUB_START), &&L(OPSUB_END)}, {&&L(OPMUL_START), &&L(OPMUL_END)}, {&&L(OPDIV_START), &&L(OPDIV_END)},
+		{&&L(OPCALL_START), &&L(OPCALL_END)}, {&&L(OPJMP_START), &&L(OPJMP_END)}, {&&L(OPCMP_START), &&L(OPCMP_END)}, {&&L(OPPOP_START), &&L(OPPOP_END)}, {&&L(OPPUSH_START), &&L(OPPUSH_END)},
+		{&&L(OPRET_START), &&L(OPRET_END)}, {&&L(OPJL_START), &&L(OPJL_END)}, {&&L(OPJG_START), &&L(OPJG_END)}, {&&L(OPSTORE_START), &&L(OPSTORE_END)}, {&&L(OPLOAD_START), &&L(OPLOAD_END)},
+		{&&L(OPiADDC_START), &&L(OPiADDC_END)}, {&&L(OPiSUBC_START), &&L(OPiSUBC_END)}, {&&L(OPiJLC_START), &&L(OPiJLC_END)}, {&&L(OPiJGC_START), &&L(OPiJGC_END)}, {&&L(OPFASTCALL_START), &&L(OPFASTCALL_END)},
+		{&&L(OPPFASTCALL_START), &&L(OPPFASTCALL_END)}, {&&L(OPiPFASTCALL_START), &&L(OPiPFASTCALL_END)},
+		{&&L(OPiPUSHC_START), &&L(OPiPUSHC_END)}, {&&L(OPCOPY_START), &&L(OPCOPY_END)}, {NULL, NULL}, {NULL, NULL},
+		/*FINAL INST*/
+		{&&L(OPABADD_START), &&L(OPABADD_END)}, {&&L(OPACADD_START), &&L(OPACADD_END)}, {&&L(OPADADD_START), &&L(OPADADD_END)}, {&&L(OPBCADD_START), &&L(OPBCADD_END)},	{&&L(OPBDADD_START), &&L(OPBDADD_END)}, {&&L(OPCDADD_START), &&L(OPCDADD_END)},
+		{&&L(OPAiADDC_START), &&L(OPAiADDC_END)}, {&&L(OPBiADDC_START), &&L(OPBiADDC_END)}, {&&L(OPCiADDC_START), &&L(OPCiADDC_END)}, {&&L(OPDiADDC_START), &&L(OPDiADDC_END)},
+		{&&L(OPAiSUBC_START), &&L(OPAiSUBC_END)}, {&&L(OPBiSUBC_START), &&L(OPBiSUBC_END)}, {&&L(OPCiSUBC_START), &&L(OPCiSUBC_END)}, {&&L(OPDiSUBC_START), &&L(OPDiSUBC_END)},
+		{&&L(OPAPOP_START), &&L(OPAPOP_END)}, {&&L(OPBPOP_START), &&L(OPBPOP_END)}, {&&L(OPCPOP_START), &&L(OPCPOP_END)}, {&&L(OPDPOP_START), &&L(OPDPOP_END)},
+		{&&L(OPAPUSH_START), &&L(OPAPUSH_END)}, {&&L(OPBPUSH_START), &&L(OPBPUSH_END)},	{&&L(OPCPUSH_START), &&L(OPCPUSH_END)}, {&&L(OPDPUSH_START), &&L(OPDPUSH_END)},
+		{&&L(OPAiPUSHC_START), &&L(OPAiPUSHC_END)},	{&&L(OPBiPUSHC_START), &&L(OPBiPUSHC_END)},	{&&L(OPCiPUSHC_START), &&L(OPCiPUSHC_END)},	{&&L(OPDiPUSHC_START), &&L(OPDiPUSHC_END)},
+		{&&L(OPACOPY_START), &&L(OPACOPY_END)}, {&&L(OPBCOPY_START), &&L(OPBCOPY_END)}, {&&L(OPCCOPY_START), &&L(OPCCOPY_END)}, {&&L(OPDCOPY_START), &&L(OPDCOPY_END)},
+		{&&L(OPAiJLC_START), &&L(OPAiJLC_END)}, {&&L(OPBiJLC_START), &&L(OPBiJLC_END)}, {&&L(OPCiJLC_START), &&L(OPCiJLC_END)}, {&&L(OPDiJLC_START), &&L(OPDiJLC_END)},
+		{&&L(OPAiJGC_START), &&L(OPAiJGC_END)}, {&&L(OPBiJGC_START), &&L(OPBiJGC_END)},	{&&L(OPCiJGC_START), &&L(OPCiJGC_END)}, {&&L(OPDiJGC_START), &&L(OPDiJGC_END)},
+		{&&L(OPAFASTCALL_START), &&L(OPAFASTCALL_END)}, {&&L(OPBFASTCALL_START), &&L(OPBFASTCALL_END)}, {&&L(OPCFASTCALL_START), &&L(OPCFASTCALL_END)}, {&&L(OPDFASTCALL_START), &&L(OPDFASTCALL_END)},
+		{&&L(OPAPFASTCALL_START), &&L(OPAPFASTCALL_END)}, {&&L(OPBPFASTCALL_START), &&L(OPBPFASTCALL_END)}, {&&L(OPCPFASTCALL_START), &&L(OPCPFASTCALL_END)}, {&&L(OPDPFASTCALL_START), &&L(OPDPFASTCALL_END)},
+		{&&L(OPARET_START), &&L(OPARET_END)}, {&&L(OPBRET_START), &&L(OPBRET_END)}, {&&L(OPCRET_START), &&L(OPCRET_END)}, {&&L(OPDRET_START), &&L(OPDRET_END)},
+		{&&L(OPAMOV_START), &&L(OPAMOV_END)}, {&&L(OPBMOV_START), &&L(OPBMOV_END)}, {&&L(OPCMOV_START), &&L(OPCMOV_END)}, {&&L(OPDMOV_START), &&L(OPDMOV_END)},
 	};
 	DISPATCH_START();
 	
 	CASE(OPMOV) {
 		DBG_P("OPMOV");
+		START(OPMOV);
 		reg[pc->dst] = pc->src;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPMOV);
+		goto NEXTOP;
 	}
 	CASE(OPADD) {
 		DBG_P("OPADD");
+		START(OPADD);
 		reg[pc->dst] += reg[pc->src];
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPADD);
+		goto NEXTOP;
 	}
 	CASE(OPiADDC) {
-		DBG_P("OPADD");
-		pc++; goto NEXTOP;
+		DBG_P("OPiADDC");
+		START(OPiADDC);
+		reg[pc->dst] += pc->src;
+		pc++;
+		END(OPiADDC);
+		goto NEXTOP;
 	}
 	CASE(OPSUB) {
 		DBG_P("OPSUB");
+		START(OPSUB);
 		reg[pc->dst] -= reg[pc->src];
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPSUB);
+		goto NEXTOP;
 	}
 	CASE(OPiSUBC) {
 		DBG_P("OPiSUBC");
+		START(OPiSUBC);
 		reg[pc->dst] -= pc->src;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPiSUBC);
+		goto NEXTOP;
 	}
 	CASE(OPMUL) {
 		DBG_P("OPMUL");
+		START(OPMUL);
 		reg[pc->dst] *= reg[pc->src];
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPMUL);
+		goto NEXTOP;
 	}
 	CASE(OPDIV) {
 		DBG_P("OPDIV");
+		START(OPDIV);
 		reg[pc->dst] /= reg[pc->src];
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPDIV);
+		goto NEXTOP;
 	}
 	CASE(OPCMP) {
 		DBG_P("OPCMP");
+		START(OPCMP);
 		pc += pc->dst;
+		END(OPCMP);
 		goto NEXTOP;
 	}
 	CASE(OPJL) {
 		DBG_P("OPJL");
-		pc += (reg[pc->dst] < reg[pc->src]) ? 2 : 3;
+		START(OPJL);
+		pc += (reg[pc->dst] < reg[pc->src]) ? pc->jmp : 1;
+		END(OPJL);
 		goto NEXTOP;
 	}
 	CASE(OPiJLC) {
 		DBG_P("OPiJLC");
+		START(OPiJLC);
 		pc += (reg[pc->dst] < pc->src) ? pc->jmp : 1;
+		END(OPiJLC);
 		goto NEXTOP;
 	}
 	CASE(OPJG) {
 		DBG_P("OPJG");
-		pc += (reg[pc->dst] > reg[pc->src]) ? 2 : 3;
+		START(OPJG);
+		pc += (reg[pc->dst] > reg[pc->src]) ? pc->jmp : 1;
+		END(OPJG);
 		goto NEXTOP;
 	}
 	CASE(OPiJGC) {
 		DBG_P("OPiJGC");
+		START(OPiJGC);
 		pc += (reg[pc->dst] > pc->src) ? pc->jmp : 1;
+		END(OPiJGC);
 		goto NEXTOP;
 	}
 	CASE(OPLOAD) {
 		DBG_P("OPLOAD");
+		START(OPLOAD);
 		//load map from virtual memory
 		void *value = fetch_from_virtual_memory(pc->name);
 		if (value == NULL) {
@@ -1124,13 +1276,19 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 			return 0;
 		}
 		reg[pc->dst] = (intptr_t)value;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPLOAD);
+		goto NEXTOP;
 	}
 	CASE(OPSTORE) {
-		pc++; goto NEXTOP;
+		START(OPSTORE);
+		pc++;
+		END(OPSTORE);
+		goto NEXTOP;
 	}
 	CASE(OPCALL) {
 		DBG_P("OPCALL");
+		START(OPCALL);
 		VirtualMachineCode *func_vmcode = (VirtualMachineCode *)fetch_from_virtual_memory(pc->name);
 		if (func_vmcode == NULL) {
 			fprintf(stderr, "[ERROR] : undefined function name [%s]\n", pc->name);
@@ -1150,13 +1308,19 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 		memcpy(reg, r->reg_stack, MAX_REG_SIZE);
 		r--;
 		reg[pc->dst] = res;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPCALL);
+		goto NEXTOP;
 	}
 	CASE(OPJMP) {
-		pc++; goto NEXTOP;
+		START(OPJMP);
+		pc++;
+		END(OPJMP);
+		goto NEXTOP;
 	}
 	CASE(OPFASTCALL) {
 		DBG_P("OPFASTCALL");
+		START(OPFASTCALL);
 		r->ret_label_stack = &&L_FASTCALLAFTER;
 		r->pc_stack = pc;
 		memcpy(r->reg_stack, reg, MAX_REG_SIZE);
@@ -1169,10 +1333,13 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 		memcpy(reg, r->reg_stack, MAX_REG_SIZE);
 		r--;
 		reg[pc->dst] = res;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPFASTCALL);
+		goto NEXTOP;
 	}
 	CASE(OPPFASTCALL) {
 		DBG_P("OPPFASTCALL");
+		START(OPPFASTCALL);
 		//======PUSH SECTION========//
 		r++;
 		r->function_arg_stack = reg[pc->dst];
@@ -1190,10 +1357,13 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 		r--;
 		reg[pc->dst] = res;
 		//============================//
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPPFASTCALL);
+		goto NEXTOP;
 	}
 	CASE(OPiPFASTCALL) {
 		DBG_P("OPiPFASTCALL");
+		START(OPiPFASTCALL);
 		//======iPUSHC SECTION========//
 		r++;
 		r->function_arg_stack = pc->src;
@@ -1212,34 +1382,51 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 		r--;
 		reg[pc->dst] = res;
 		//============================//
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPiPFASTCALL);
+		goto NEXTOP;
 	}
 	CASE(OPPUSH) {
 		DBG_P("OPPUSH");
+		START(OPPUSH);
 		r++;
 		r->function_arg_stack = reg[pc->dst];
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPPUSH);
+		goto NEXTOP;
 	}
 	CASE(OPiPUSHC) {
-		DBG_P("OPiPUSH");
+		DBG_P("OPiPUSHC");
+		START(OPiPUSHC);
 		r++;
 		r->function_arg_stack = pc->src;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPiPUSHC);
+		goto NEXTOP;
 	}
 	CASE(OPPOP) {
 		DBG_P("OPPOP");
+		START(OPPOP);
 		cur_arg = r->function_arg_stack;
 		reg[pc->dst] = cur_arg;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPPOP);
+		goto NEXTOP;
 	}
 	CASE(OPCOPY) {
 		DBG_P("OPCOPY");
+		START(OPCOPY);
 		reg[pc->dst] = cur_arg;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPCOPY);
+		goto NEXTOP;
 	}
 	CASE(OPTHCODE) {
 		DBG_P("OPTHCODE");
 		VirtualMachine_createDirectThreadingCode(vmcode, jmp_table);
+#ifdef USING_SELECTIVE_INLINING
+		VirtualMachine_createSelectiveInliningCode(vmcode, jmp_table, block_table);
+#endif
 		return 0;
 	}
 	CASE(OPNOP) {
@@ -1248,396 +1435,526 @@ static int VirtualMachine_run(VirtualMachineCode *vmcode)
 	}
 	CASE(OPRET) {
 		DBG_P("OPRET");
+		START(OPRET);
 		reg[0] = reg[pc->src];
+		END(OPRET);
 		RETURN();
 	}
 	//================================================================//
 	CASE(OPABADD) {
 		DBG_P("OPABADD : ");
+		START(OPABADD);
 		reg[0] += reg[1];
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPABADD);
+		goto NEXTOP;
 	}
 	CASE(OPACADD) {
 		DBG_P("OPACADD : ");
+		START(OPACADD);
 		reg[0] += reg[2];
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPACADD);
+		goto NEXTOP;
 	}
 	CASE(OPADADD) {
 		DBG_P("OPADADD : ");
+		START(OPADADD);
 		reg[0] += reg[3];
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPADADD);
+		goto NEXTOP;
 	}
 	CASE(OPBCADD) {
 		DBG_P("OPBCADD : ");
+		START(OPBCADD);
 		reg[1] += reg[2];
 		//asm volatile("hoge:");
 		//asm volatile("add %2, %0" : "=r"(reg[1]): "0"(reg[1]), "r"(reg[2]));
 		//asm volatile("foo:");
-		pc++; //goto NEXTOP;
-		DBG_P("OPBRET : ");
-		reg[0] = reg[1];
-		RETURN();
+		pc++;
+		END(OPBCADD);
+		goto NEXTOP;
 	}
 	CASE(OPBDADD) {
 		DBG_P("OPBDADD : ");
+		START(OPBDADD);
 		reg[1] += reg[3];
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPBDADD);
+		goto NEXTOP;
 	}
 	CASE(OPCDADD) {
 		DBG_P("OPCDADD : ");
+		START(OPCDADD);
 		reg[2] += reg[3];
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPCDADD);
+		goto NEXTOP;
 	}
 	CASE(OPAiADDC) {
 		DBG_P("OPAiADDC : ");
+		START(OPAiADDC);
 		reg[0] += pc->src;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPAiADDC);
+		goto NEXTOP;
 	}
 	CASE(OPBiADDC) {
 		DBG_P("OPBiADDC : ");
+		START(OPBiADDC);
 		reg[1] += pc->src;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPBiADDC);
+		goto NEXTOP;
 	}
 	CASE(OPCiADDC) {
 		DBG_P("OPCiADDC : ");
+		START(OPCiADDC);
 		reg[2] += pc->src;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPCiADDC);
+		goto NEXTOP;
 	}
 	CASE(OPDiADDC) {
 		DBG_P("OPDiADDC : ");
+		START(OPDiADDC);
 		reg[3] += pc->src;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPDiADDC);
+		goto NEXTOP;
 	}
 	CASE(OPAiSUBC) {
 		DBG_P("OPAiSUBC : ");
+		START(OPAiSUBC);
 		reg[0] -= pc->src;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPAiSUBC);
+		goto NEXTOP;
 	}
 	CASE(OPBiSUBC) {
 		DBG_P("OPBiSUBC : ");
+		START(OPBiSUBC);
 		reg[1] -= pc->src;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPBiSUBC);
+		goto NEXTOP;
 	}
 	CASE(OPCiSUBC) {
 		DBG_P("OPCiSUBC : ");
+		START(OPCiSUBC);
 		reg[2] -= pc->src;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPCiSUBC);
+		goto NEXTOP;
 	}
 	CASE(OPDiSUBC) {
 		DBG_P("OPDiSUBC : ");
+		START(OPDiSUBC);
 		reg[3] -= pc->src;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPDiSUBC);
+		goto NEXTOP;
 	}
 	CASE(OPAPOP) {
 		DBG_P("OPAPOP : ");
+		START(OPAPOP);
 		cur_arg = r->function_arg_stack;
 		reg[0] = cur_arg;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPAPOP);
+		goto NEXTOP;
 	}
 	CASE(OPBPOP) {
 		DBG_P("OPBPOP : ");
+		START(OPBPOP);
 		cur_arg = r->function_arg_stack;
 		reg[1] = cur_arg;
-		pc++; //goto NEXTOP;
-		DBG_P("OPBiSUBC : ");
-		reg[1] -= pc->src;
 		pc++;
-		DBG_P("OPBPFASTCALL : ");
-		PUSH(reg, reg[1], &&L_tBPFASTCALLAFTER, pc);//cannot inline memcpy used
-		pc = local_cache_func_vmcode;
-		goto NEXTOP;//===>OPDPOP
-	L_tBPFASTCALLAFTER:
-		DBG_P("L_CPFASTCALLAFTER");
-		int res = reg[0];
-		POP();
-		reg[1] = res;
-		pc++; goto NEXTOP;//===>OPBPOP
+		END(OPBPOP);
+		goto NEXTOP;
 	}
 	CASE(OPCPOP) {
 		DBG_P("OPCPOP : ");
+		START(OPCPOP);
 		cur_arg = r->function_arg_stack;
 		reg[2] = cur_arg;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPCPOP);
+		goto NEXTOP;
 	}
 	CASE(OPDPOP) {
 		DBG_P("OPDPOP : ");
+		START(OPDPOP);
 		cur_arg = r->function_arg_stack;
 		reg[3] = cur_arg;
-		pc++; //goto NEXTOP;
-		DBG_P("OPDiJLC : ");
-		pc += (reg[3] < pc->src) ? pc->jmp : 1;
-		goto NEXTOP;//====>OPAMOV or OPCCOPY
+		pc++;
+		END(OPDPOP);
+		goto NEXTOP;
 	}
 	CASE(OPAPUSH) {
 		DBG_P("OPAPUSH : ");
+		START(OPAPUSH);
 		r++;
 		r->function_arg_stack = reg[0];
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPAPUSH);
+		goto NEXTOP;
 	}
 	CASE(OPBPUSH) {
 		DBG_P("OPBPUSH : ");
+		START(OPBPUSH);
 		r++;
 		r->function_arg_stack = reg[1];
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPBPUSH);
+		goto NEXTOP;
 	}
 	CASE(OPCPUSH) {
 		DBG_P("OPCPUSH : ");
+		START(OPCPUSH);
 		r++;
 		r->function_arg_stack = reg[2];
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPCPUSH);
+		goto NEXTOP;
 	}
 	CASE(OPDPUSH) {
 		DBG_P("OPDPUSH : ");
+		START(OPDPUSH);
 		r++;
 		r->function_arg_stack = reg[3];
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPDPUSH);
+		goto NEXTOP;
 	}
 	CASE(OPAiPUSHC) {
 		DBG_P("OPAiPUSHC : ");
+		START(OPAiPUSHC);
 		r++;
 		r->function_arg_stack = pc->src;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPAiPUSHC);
+		goto NEXTOP;
 	}
 	CASE(OPBiPUSHC) {
 		DBG_P("OPBiPUSHC : ");
+		START(OPBiPUSHC);
 		r++;
 		r->function_arg_stack = pc->src;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPBiPUSHC);
+		goto NEXTOP;
 	}
 	CASE(OPCiPUSHC) {
 		DBG_P("OPCiPUSHC : ");
+		START(OPCiPUSHC);
 		r++;
 		r->function_arg_stack = pc->src;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPCiPUSHC);
+		goto NEXTOP;
 	}
 	CASE(OPDiPUSHC) {
 		DBG_P("OPDiPUSHC : ");
+		START(OPDiPUSHC);
 		r++;
 		r->function_arg_stack = pc->src;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPDiPUSHC);
+		goto NEXTOP;
 	}
 	CASE(OPACOPY) {
 		DBG_P("OPACOPY : ");
+		START(OPACOPY);
 		reg[0] = cur_arg;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPACOPY);
+		goto NEXTOP;
 	}
 	CASE(OPBCOPY) {
 		DBG_P("OPBCOPY : ");
+		START(OPBCOPY);
 		reg[1] = cur_arg;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPBCOPY);
+		goto NEXTOP;
 	}
 	CASE(OPCCOPY) {
 		DBG_P("OPCCOPY : ");
+		START(OPCCOPY);
 		reg[2] = cur_arg;
-		pc++;// goto NEXTOP;
-		DBG_P("OPCiSUBC : ");
-		reg[2] -= pc->src;
 		pc++;
-		DBG_P("OPCPFASTCALL : ");
-		PUSH(reg, reg[2], &&L_tCPFASTCALLAFTER, pc);//cannot inline memcpy used
-		pc = local_cache_func_vmcode;
-		goto NEXTOP;//===>OPDPOP
-	L_tCPFASTCALLAFTER:
-		DBG_P("L_CPFASTCALLAFTER");
-		int res = reg[0];
-		POP();
-		reg[2] = res;
-		pc++; goto NEXTOP;//===>OPBPOP
+		END(OPCCOPY);
+		goto NEXTOP;
 	}
 	CASE(OPDCOPY) {
 		DBG_P("OPDCOPY : ");
+		START(OPDCOPY);
 		reg[3] = cur_arg;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPDCOPY);
+		goto NEXTOP;
 	}
 	CASE(OPAiJLC) {
 		DBG_P("OPAiJLC : ");
+		START(OPAiJLC);
 		pc += (reg[0] < pc->src) ? pc->jmp : 1;
+		END(OPAiJLC);
 		goto NEXTOP;
 	}
 	CASE(OPBiJLC) {
 		DBG_P("OPBiJLC : ");
+		START(OPBiJLC);
 		pc += (reg[1] < pc->src) ? pc->jmp : 1;
+		END(OPBiJLC);
 		goto NEXTOP;
 	}
 	CASE(OPCiJLC) {
 		DBG_P("OPCiJLC : ");
+		START(OPCiJLC);
 		pc += (reg[2] < pc->src) ? pc->jmp : 1;
+		END(OPCiJLC);
 		goto NEXTOP;
 	}
 	CASE(OPDiJLC) {
 		DBG_P("OPDiJLC : ");
+		START(OPDiJLC);
 		pc += (reg[3] < pc->src) ? pc->jmp : 1;
+		END(OPDiJLC);
 		goto NEXTOP;
 	}
 	CASE(OPAiJGC) {
 		DBG_P("OPAiJGC : ");
+		START(OPAiJGC);
 		pc += (reg[0] > pc->src) ? pc->jmp : 1;
+		END(OPAiJGC);
 		goto NEXTOP;
 	}
 	CASE(OPBiJGC) {
 		DBG_P("OPBiJGC : ");
+		START(OPBiJGC);
 		pc += (reg[1] > pc->src) ? pc->jmp : 1;
+		END(OPBiJGC);
 		goto NEXTOP;
 	}
 	CASE(OPCiJGC) {
 		DBG_P("OPCiJGC : ");
+		START(OPCiJGC);
 		pc += (reg[2] > pc->src) ? pc->jmp : 1;
+		END(OPCiJGC);
 		goto NEXTOP;
 	}
 	CASE(OPDiJGC) {
 		DBG_P("OPDiJGC : ");
+		START(OPDiJGC);
 		pc += (reg[3] > pc->src) ? pc->jmp : 1;
+		END(OPDiJGC);
 		goto NEXTOP;
 	}
 	CASE(OPAFASTCALL) {
 		DBG_P("OPAFASTCALL : ");
+		START(OPAFASTCALL);
 		r->ret_label_stack = &&L_AFASTCALLAFTER;
 		r->pc_stack = pc;
 		memcpy(r->reg_stack, reg, regsize);
 		pc = local_cache_func_vmcode;
 		goto NEXTOP;
 	L_AFASTCALLAFTER:
-		DBG_P("L_AFASTCALLAFTER");
+		//DBG_P("L_AFASTCALLAFTER");
 		pc = r->pc_stack;
 		memcpy(reg, r->reg_stack, regsize);
 		r--;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPAFASTCALL);
+		goto NEXTOP;
 	}
 	CASE(OPBFASTCALL) {
 		DBG_P("OPBFASTCALL : ");
+		START(OPBFASTCALL);
 		r->ret_label_stack = &&L_BFASTCALLAFTER;
 		r->pc_stack = pc;
 		memcpy(r->reg_stack, reg, regsize);
 		pc = local_cache_func_vmcode;
 		goto NEXTOP;
 	L_BFASTCALLAFTER:
-		DBG_P("L_BFASTCALLAFTER");
+		//DBG_P("L_BFASTCALLAFTER");
 		pc = r->pc_stack;
 		int res = reg[0];
 		memcpy(reg, r->reg_stack, regsize);
 		r--;
 		reg[1] = res;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPBFASTCALL);
+		goto NEXTOP;
 	}
 	CASE(OPCFASTCALL) {
 		DBG_P("OPCFASTCALL : ");
+		START(OPCFASTCALL);
 		r->ret_label_stack = &&L_CFASTCALLAFTER;
 		r->pc_stack = pc;
 		memcpy(r->reg_stack, reg, regsize);
 		pc = local_cache_func_vmcode;
 		goto NEXTOP;
 	L_CFASTCALLAFTER:
-		DBG_P("L_CFASTCALLAFTER");
+		//DBG_P("L_CFASTCALLAFTER");
 		pc = r->pc_stack;
 		int res = reg[0];
 		memcpy(reg, r->reg_stack, regsize);
 		r--;
 		reg[2] = res;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPCFASTCALL);
+		goto NEXTOP;
 	}
 	CASE(OPDFASTCALL) {
 		DBG_P("OPDFASTCALL : ");
+		START(OPDFASTCALL);
 		r->ret_label_stack = &&L_DFASTCALLAFTER;
 		r->pc_stack = pc;
 		memcpy(r->reg_stack, reg, regsize);
 		pc = local_cache_func_vmcode;
 		goto NEXTOP;
 	L_DFASTCALLAFTER:
-		DBG_P("L_DFASTCALLAFTER");
+		//DBG_P("L_DFASTCALLAFTER");
 		pc = r->pc_stack;
 		int res = reg[0];
 		memcpy(reg, r->reg_stack, regsize);
 		r--;
 		reg[3] = res;
-		pc++; goto NEXTOP;
-	}
-	CASE(OPAPFASTCALL) {
-		DBG_P("OPAPFASTCALL : ");
-		PUSH(reg, reg[0], &&L_APFASTCALLAFTER, pc);
-		pc = local_cache_func_vmcode;
+		pc++;
+		END(OPDFASTCALL);
 		goto NEXTOP;
-	L_APFASTCALLAFTER:
-		DBG_P("L_APFASTCALLAFTER");
-		POP();
-		pc++; goto NEXTOP;
-	}
-	CASE(OPBPFASTCALL) {
-		DBG_P("OPBPFASTCALL : ");
-		PUSH(reg, reg[1], &&L_BPFASTCALLAFTER, pc);
-		pc = local_cache_func_vmcode;
-		goto NEXTOP;
-	L_BPFASTCALLAFTER:
-		DBG_P("L_BPFASTCALLAFTER");
-		int res = reg[0];
-		POP();
-		reg[1] = res;
-		pc++; goto NEXTOP;
-	}
-	CASE(OPCPFASTCALL) {
-		DBG_P("OPCPFASTCALL : ");
-		PUSH(reg, reg[2], &&L_CPFASTCALLAFTER, pc);
-		pc = local_cache_func_vmcode;
-		goto NEXTOP;
-	L_CPFASTCALLAFTER:
-		DBG_P("L_CPFASTCALLAFTER");
-		int res = reg[0];
-		POP();
-		reg[2] = res;
-		pc++; goto NEXTOP;
-	}
-	CASE(OPDPFASTCALL) {
-		DBG_P("OPDPFASTCALL : ");
-		PUSH(reg, reg[3], &&L_DPFASTCALLAFTER, pc);
-		pc = local_cache_func_vmcode;
-		goto NEXTOP;
-	L_DPFASTCALLAFTER:
-		DBG_P("L_DPFASTCALLAFTER");
-		int res = reg[0];
-		POP();
-		reg[3] = res;
-		pc++; goto NEXTOP;
 	}
 	CASE(OPARET) {
 		DBG_P("OPARET : ");
+		START(OPARET);
+		END(OPARET);
 		RETURN();
 	}
 	CASE(OPBRET) {
 		DBG_P("OPBRET : ");
+		START(OPBRET);
 		reg[0] = reg[1];
+		END(OPBRET);
 		RETURN();
 	}
 	CASE(OPCRET) {
 		DBG_P("OPCRET : ");
+		START(OPCRET);
 		reg[0] = reg[2];
+		END(OPCRET);
 		RETURN();
 	}
 	CASE(OPDRET) {
 		DBG_P("OPDRET : ");
+		START(OPDRET);
 		reg[0] = reg[3];
+		END(OPDRET);
 		RETURN();
 	}
 	CASE(OPAMOV) {
 		DBG_P("OPAMOV : ");
+		START(OPAMOV);
 		reg[0] = pc->src;
-		pc++; //goto NEXTOP;
-		DBG_P("OPARET : ");
-		RETURN();
+		pc++;
+		END(OPAMOV);
+		goto NEXTOP;
 	}
 	CASE(OPBMOV) {
 		DBG_P("OPBMOV : ");
+		START(OPBMOV);
 		reg[1] = pc->src;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPBMOV);
+		goto NEXTOP;
 	}
 	CASE(OPCMOV) {
 		DBG_P("OPCMOV : ");
+		START(OPCMOV);
 		reg[2] = pc->src;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPCMOV);
+		goto NEXTOP;
 	}
 	CASE(OPDMOV) {
 		DBG_P("OPDMOV : ");
+		START(OPDMOV);
 		reg[3] = pc->src;
-		pc++; goto NEXTOP;
+		pc++;
+		END(OPDMOV);
+		goto NEXTOP;
 	}
+	CASE(OPAPFASTCALL) {
+		DBG_P("OPAPFASTCALL : ");
+		START(OPAPFASTCALL);
+		PUSH(reg, reg[0], &&L_APFASTCALLAFTER, pc);
+		pc = local_cache_func_vmcode;
+		goto NEXTOP;
+	L_APFASTCALLAFTER:;
+		//DBG_P("L_APFASTCALLAFTER");
+		POP();
+		pc++;
+		END(OPAPFASTCALL);
+		goto NEXTOP;
+	}
+	CASE(OPBPFASTCALL) {
+		DBG_P("OPBPFASTCALL : ");
+		START(OPBPFASTCALL);
+		PUSH(reg, reg[1], &&L_BPFASTCALLAFTER, pc);
+		pc = local_cache_func_vmcode;
+		goto NEXTOP;
+	L_BPFASTCALLAFTER:;
+		//DBG_P("L_BPFASTCALLAFTER");
+		int res = reg[0];
+		POP();
+		reg[1] = res;
+		pc++;
+		END(OPBPFASTCALL);
+		goto NEXTOP;
+	}
+	CASE(OPCPFASTCALL) {
+		DBG_P("OPCPFASTCALL : ");
+		START(OPCPFASTCALL);
+		PUSH(reg, reg[2], &&L_CPFASTCALLAFTER, pc);
+		pc = local_cache_func_vmcode;
+		goto NEXTOP;
+	L_CPFASTCALLAFTER:;
+		//DBG_P("L_CPFASTCALLAFTER");
+		int res = reg[0];
+		POP();
+		reg[2] = res;
+		pc++;
+		END(OPCPFASTCALL);
+		goto NEXTOP;
+	}
+	CASE(OPDPFASTCALL) {
+		DBG_P("OPDPFASTCALL : ");
+		START(OPDPFASTCALL);
+		PUSH(reg, reg[3], &&L_DPFASTCALLAFTER, pc);
+		pc = local_cache_func_vmcode;
+		goto NEXTOP;
+	L_DPFASTCALLAFTER:;
+		//DBG_P("L_DPFASTCALLAFTER");
+		int res = reg[0];
+		POP();
+		reg[3] = res;
+		pc++;
+		END(OPDPFASTCALL);
+		goto NEXTOP;
+	}
+	//================= Selective Inlining Code ===================//
+	CASE(GOTO_BLOCK) {
+		DBG_P("GOTO_BLOCK : ");
+		pc->code();
+		goto NEXTOP;
+	}
+	CASE(RET_BLOCK) {
+		DBG_P("RET_BLOCK : ");
+		pc->code();
+		RETURN();
+	}
+	//==============================================================//
 	DISPATCH_END();
 	return reg[0];
 }

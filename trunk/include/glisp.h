@@ -163,6 +163,8 @@ typedef enum {
 	OPBMOV,
 	OPCMOV,
 	OPDMOV,
+	GOTO_BLOCK,
+	RET_BLOCK,
 } OpCode;
 
 struct VirtualMachineCodeAPI;
@@ -170,7 +172,10 @@ typedef struct _VirtualMachineCode {
 	OpCode op; /* operation code */
 	int dst;   /* register number */
 	int src;   /* src value or register number */
-	int jmp;   /* jmp register number */
+	union {
+		void (*code)(void);/* selective inlining code */
+		int jmp;   /* jmp register number */
+	};
 	const char *name; /* variable or function name */
 	const char **args; /* function's args name set */
 	void *opnext; /* for direct threading */
